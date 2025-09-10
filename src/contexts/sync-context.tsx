@@ -69,6 +69,15 @@ const initialState: State = {
   syncs: [],
 };
 
+const emptyFirebaseConfig: FirebaseConfig = {
+  apiKey: '',
+  authDomain: '',
+  projectId: '',
+  storageBucket: '',
+  messagingSenderId: '',
+  appId: '',
+};
+
 // Default values are for example purposes only.
 const defaultEnvironments: Environment[] = [
   {
@@ -229,19 +238,57 @@ type SyncContextType = {
 
 const SyncContext = createContext<SyncContextType | undefined>(undefined);
 
-const emptyFirebaseConfig: FirebaseConfig = {
-  apiKey: '',
-  authDomain: '',
-  projectId: '',
-  storageBucket: '',
-  messagingSenderId: '',
-  appId: '',
-};
+const loadState = (): State => {
+    try {
+        const storedState = localStorage.getItem('syncAppState');
+        if (!storedState) {
+          const initialSyncs: SyncInstance[] = defaultEnvironments.map(env => ({
+              id: env.id,
+              isPaused: true,
+              syncState: 'idle',
+              syncProgress: 0,
+              logs: [],
+          }));
+          return { environments: defaultEnvironments, syncs: initialSyncs };
+        }
+        
+        const parsedState = JSON.parse(storedState);
 
-const defaultSchedule: SyncSchedule = {
-  value: 30,
-  unit: 'seconds',
-  days: [],
+        // Basic validation to check if the loaded state is plausible
+        if (!Array.isArray(parsedState.environments) || !Array.isArray(parsedState.syncs)) {
+          throw new Error("Invalid state structure");
+        }
+
+        // Data migration and validation
+        parsedState.environments = parsedState.environments.map((env: any) => ({
+            ...env,
+            id: env.id || uuidv4(),
+            name: env.name || 'Untitled Connection',
+            url: env.url || '',
+            firebasePath: env.firebasePath || 'storage/data/',
+            firebaseConfig: env.firebaseConfig || emptyFirebaseConfig,
+            schedule: env.schedule || { value: 30, unit: 'seconds', days: [] },
+        }));
+        
+        parsedState.syncs.forEach((sync: SyncInstance) => {
+          if (sync.logs && sync.logs.length > 50) {
+            sync.logs = sync.logs.slice(0, 50);
+          }
+        });
+
+        return parsedState;
+
+    } catch (error) {
+        console.error("Failed to parse state from localStorage, loading default state.", error);
+        const initialSyncs: SyncInstance[] = defaultEnvironments.map(env => ({
+            id: env.id,
+            isPaused: true,
+            syncState: 'idle',
+            syncProgress: 0,
+            logs: [],
+        }));
+        return { environments: defaultEnvironments, syncs: initialSyncs };
+    }
 };
 
 
@@ -249,56 +296,13 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(syncReducer, initialState);
 
   useEffect(() => {
-    try {
-      const storedState = localStorage.getItem('syncAppState');
-      if (storedState) {
-        const parsedState = JSON.parse(storedState);
-
-        // Data migration and validation
-        parsedState.environments = parsedState.environments.map((env: any) => ({
-            ...env,
-            firebaseConfig: env.firebaseConfig || emptyFirebaseConfig,
-            // Migration for old structure to new schedule structure
-            schedule: env.schedule || {
-                value: env.syncInterval / 1000 || 30,
-                unit: 'seconds',
-                days: []
-            },
-        }));
-        
-        parsedState.syncs.forEach((sync: SyncInstance) => {
-          if (sync.logs.length > 50) {
-            sync.logs = sync.logs.slice(0, 50);
-          }
-        });
-
-        dispatch({ type: 'INITIALIZE_STATE', payload: parsedState });
-      } else {
-         const initialSyncs: SyncInstance[] = defaultEnvironments.map(env => ({
-            id: env.id,
-            isPaused: true,
-            syncState: 'idle',
-            syncProgress: 0,
-            logs: [],
-        }));
-        dispatch({ type: 'INITIALIZE_STATE', payload: { environments: defaultEnvironments, syncs: initialSyncs } });
-      }
-    } catch (error) {
-      console.error("Failed to parse state from localStorage", error);
-       const initialSyncs: SyncInstance[] = defaultEnvironments.map(env => ({
-        id: env.id,
-        isPaused: true,
-        syncState: 'idle',
-        syncProgress: 0,
-        logs: [],
-    }));
-    dispatch({ type: 'INITIALIZE_STATE', payload: { environments: defaultEnvironments, syncs: initialSyncs } });
-    }
+    const loadedState = loadState();
+    dispatch({ type: 'INITIALIZE_STATE', payload: loadedState });
   }, []);
 
   useEffect(() => {
     try {
-      if (state.environments.length > 0 || state.syncs.length > 0) {
+      if (state !== initialState) { // Avoid saving the initial empty state
         localStorage.setItem('syncAppState', JSON.stringify(state));
       }
     } catch (error) {
