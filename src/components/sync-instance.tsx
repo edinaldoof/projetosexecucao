@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -16,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApp, getApps, initializeApp } from 'firebase/app';
-import { getStorage } from 'firebase/storage';
+import { getStorage, ref, uploadString } from 'firebase/storage';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -72,13 +71,21 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
   const handleSync = useCallback(async () => {
     if (sync.isPaused) return;
 
+    if (!env.firebaseConfig?.projectId || !env.url) {
+      const errorMessage = "Configuração do Firebase ou URL de origem ausente. Verifique as configurações da conexão.";
+      dispatch({ type: 'SYNC_ERROR', id: sync.id, error: errorMessage });
+      toast({
+        variant: 'destructive',
+        title: `Falha na Configuração: ${env.name}`,
+        description: errorMessage,
+      });
+      return;
+    }
+    
     // Use a unique app name for each initialization to avoid conflicts
     const appName = `firebase-app-${env.id}`;
     const app = getApps().find(app => app.name === appName) || initializeApp(env.firebaseConfig, appName);
     const storage = getStorage(app);
-    // In a real scenario, you would use this 'storage' instance to upload data.
-    console.log(`Firebase Storage instance for ${env.name} (Project: ${env.firebaseConfig.projectId})`, storage);
-
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -89,33 +96,27 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     dispatch({ type: 'START_SYNC', id: sync.id });
 
     try {
-      for (let i = 0; i <= 50; i += 10) {
-        if (signal.aborted) throw new DOMException('Sincronização abortada pelo usuário.', 'AbortError');
-        await new Promise(resolve => setTimeout(resolve, 200));
-        dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: i });
-      }
-
+      // Step 1: Fetching data from the source URL
+      dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 25 });
       const response = await fetch(env.url, { signal });
 
       if (!response.ok) {
         throw new Error(`A resposta da rede não foi 'ok': ${response.statusText}`);
       }
       
-      // Here you would typically get the data and upload to Firebase Storage
-      // const data = await response.json();
-      // const storageRef = ref(storage, env.firebasePath);
-      // await uploadString(storageRef, JSON.stringify(data), 'raw');
+      const data = await response.json();
+      dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 50 });
+
+      // Step 2: Uploading data to Firebase Storage
+      const storageRef = ref(storage, env.firebasePath);
+      await uploadString(storageRef, JSON.stringify(data), 'raw');
       
-      for (let i = 50; i <= 100; i += 10) {
-        if (signal.aborted) throw new DOMException('Sincronização abortada pelo usuário.', 'AbortError');
-        await new Promise(resolve => setTimeout(resolve, 200));
-        dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: i });
-      }
+      dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 100 });
       
       dispatch({ type: 'SYNC_SUCCESS', id: sync.id });
     } catch (error: any) {
       if (error.name === 'AbortError') {
-        dispatch({ type: 'SYNC_ERROR', id: sync.id, error: error.message });
+        dispatch({ type: 'SYNC_ERROR', id: sync.id, error: 'Sincronização abortada pelo usuário.' });
       } else {
         const { enhancedMessage } = await smartSyncNotifications({ errorMessage: error.message });
         dispatch({ type: 'SYNC_ERROR', id: sync.id, error: enhancedMessage });
