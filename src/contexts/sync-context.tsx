@@ -222,6 +222,16 @@ type SyncContextType = {
 
 const SyncContext = createContext<SyncContextType | undefined>(undefined);
 
+const emptyFirebaseConfig: FirebaseConfig = {
+  apiKey: '',
+  authDomain: '',
+  projectId: '',
+  storageBucket: '',
+  messagingSenderId: '',
+  appId: '',
+};
+
+
 export function SyncProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(syncReducer, initialState);
 
@@ -230,11 +240,19 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       const storedState = localStorage.getItem('syncAppState');
       if (storedState) {
         const parsedState = JSON.parse(storedState);
+
+        // Data migration and validation
+        parsedState.environments = parsedState.environments.map((env: any) => ({
+            ...env,
+            firebaseConfig: env.firebaseConfig || emptyFirebaseConfig,
+        }));
+        
         parsedState.syncs.forEach((sync: SyncInstance) => {
           if (sync.logs.length > 50) {
             sync.logs = sync.logs.slice(0, 50);
           }
         });
+
         dispatch({ type: 'INITIALIZE_STATE', payload: parsedState });
       } else {
          const initialSyncs: SyncInstance[] = defaultEnvironments.map(env => ({

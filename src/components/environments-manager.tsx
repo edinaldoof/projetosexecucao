@@ -93,8 +93,8 @@ export default function EnvironmentsManager() {
               {state.environments.map((env) => (
                 <TableRow key={env.id}>
                   <TableCell className="font-medium">{env.name}</TableCell>
-                  <TableCell className="font-mono text-sm">{env.firebaseConfig.projectId}</TableCell>
-                  <TableCell className="font-mono text-sm">{env.firebaseConfig.storageBucket}</TableCell>
+                  <TableCell className="font-mono text-sm">{env.firebaseConfig?.projectId || 'N/A'}</TableCell>
+                  <TableCell className="font-mono text-sm">{env.firebaseConfig?.storageBucket || 'N/A'}</TableCell>
                   <TableCell>{env.syncInterval / 1000}</TableCell>
                   <TableCell className="text-right space-x-2">
                     <Button variant="outline" size="icon" onClick={() => handleEdit(env)}>
