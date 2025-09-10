@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -27,6 +27,10 @@ import { Environment, SyncSchedule } from '@/contexts/sync-context';
 import { Separator } from './ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Checkbox } from './ui/checkbox';
+import { useToast } from '@/hooks/use-toast';
+import { getApp, getApps, initializeApp } from 'firebase/app';
+import { getStorage, ref } from 'firebase/storage';
+import { Loader2 } from 'lucide-react';
 
 const weekDays = [
   { id: 'sun', label: 'D' },
@@ -78,6 +82,8 @@ export default function EnvironmentForm({
   onSave,
   environment,
 }: EnvironmentFormProps) {
+  const { toast } = useToast();
+  const [isTesting, setIsTesting] = useState(false);
   const form = useForm<EnvironmentFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -124,6 +130,41 @@ export default function EnvironmentForm({
       }
     }
   }, [environment, form, isOpen]);
+
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    const data = form.getValues();
+    try {
+      // 1. Test Source URL
+      const sourceResponse = await fetch(data.url, { method: 'HEAD' }); // HEAD is lighter than GET
+      if (!sourceResponse.ok) {
+        throw new Error(`Falha ao acessar a URL de origem. Status: ${sourceResponse.statusText}`);
+      }
+
+      // 2. Test Firebase Connection
+      if (!data.firebaseConfig || !data.firebaseConfig.projectId) {
+          throw new Error('Configuração do Firebase incompleta.');
+      }
+      const appName = `firebase-test-${Date.now()}`;
+      const app = initializeApp(data.firebaseConfig, appName);
+      const storage = getStorage(app);
+      ref(storage, data.firebasePath); // This doesn't upload, just creates a reference to validate path
+
+      toast({
+          title: "Teste Bem-Sucedido!",
+          description: "A conexão com a URL de origem e o Firebase foi validada com sucesso.",
+      });
+
+    } catch (error: any) {
+        toast({
+            variant: 'destructive',
+            title: "Falha no Teste de Conexão",
+            description: error.message || 'Ocorreu um erro desconhecido.',
+        });
+    } finally {
+        setIsTesting(false);
+    }
+  };
 
   const onSubmit = (data: EnvironmentFormValues) => {
     onSave({
@@ -350,9 +391,13 @@ export default function EnvironmentForm({
                 </FormItem>
               )}
             />
-            <DialogFooter>
+            <DialogFooter className='gap-2 sm:justify-end'>
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                     Cancelar
+                </Button>
+                <Button type="button" variant="secondary" onClick={handleTestConnection} disabled={isTesting}>
+                    {isTesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Testar Conexão
                 </Button>
                 <Button type="submit">Salvar Conexão</Button>
             </DialogFooter>
