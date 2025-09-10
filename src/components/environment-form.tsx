@@ -302,19 +302,6 @@ export default function EnvironmentForm({
             <h3 className="text-lg font-medium">Configuração do Firebase (Destino)</h3>
              <FormField
               control={form.control}
-              name="firebasePath"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Caminho no Storage</FormLabel>
-                  <FormControl>
-                    <Input placeholder="caminho/para/salvar/dados.json" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
               name="firebaseConfig.apiKey"
               render={({ field }) => (
                 <FormItem>
@@ -387,6 +374,22 @@ export default function EnvironmentForm({
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="firebasePath"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Caminho no Storage</FormLabel>
+                  <FormControl>
+                    <Input placeholder="ex: backups/clientes/" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    Define a pasta onde os arquivos serão salvos. Ex: 'backups/clientes/'.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
