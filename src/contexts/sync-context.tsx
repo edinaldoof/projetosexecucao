@@ -9,7 +9,7 @@ export type SyncState = 'idle' | 'syncing' | 'success' | 'error';
 export type LogEntry = {
   id: number;
   message: string;
-  status: 'success' | 'error';
+  status: 'success' | 'error' | 'info';
   timestamp: string;
 };
 
@@ -60,6 +60,7 @@ type Action =
   | { type: 'SYNC_SUCCESS'; id: string }
   | { type: 'SYNC_ERROR'; id: string; error: string }
   | { type: 'UPDATE_PROGRESS'; id: string; progress: number }
+  | { type: 'ADD_LOG'; id: string; log: Omit<LogEntry, 'id' | 'timestamp'> }
   | { type: 'ADD_ENVIRONMENT'; environment: Omit<Environment, 'id'> & { id?: string } }
   | { type: 'UPDATE_ENVIRONMENT'; environment: Environment }
   | { type: 'REMOVE_ENVIRONMENT'; id: string };
@@ -98,7 +99,7 @@ function syncReducer(state: State, action: Action): State {
       return {
         ...state,
         syncs: state.syncs.map(sync =>
-          sync.id === action.id ? { ...sync, syncState: 'syncing', syncProgress: 0 } : sync
+          sync.id === action.id ? { ...sync, syncState: 'syncing', syncProgress: 0, logs: [] } : sync
         ),
       };
 
@@ -113,13 +114,13 @@ function syncReducer(state: State, action: Action): State {
                 lastSync: new Date(),
                 syncProgress: 100,
                 logs: [
+                  ...sync.logs,
                   {
                     id: Date.now(),
                     message: 'Sincronização concluída com sucesso.',
                     status: 'success',
                     timestamp: new Date().toLocaleTimeString(),
                   },
-                  ...sync.logs,
                 ],
               }
             : sync
@@ -135,13 +136,13 @@ function syncReducer(state: State, action: Action): State {
                 ...sync,
                 syncState: 'error',
                 logs: [
+                  ...sync.logs,
                   {
                     id: Date.now(),
                     message: `Falha na sincronização: ${action.error}`,
                     status: 'error',
                     timestamp: new Date().toLocaleTimeString(),
                   },
-                  ...sync.logs,
                 ],
               }
             : sync
@@ -154,6 +155,26 @@ function syncReducer(state: State, action: Action): State {
           syncs: state.syncs.map(sync =>
             sync.id === action.id ? { ...sync, syncProgress: action.progress } : sync
           ),
+        };
+    
+    case 'ADD_LOG':
+        return {
+            ...state,
+            syncs: state.syncs.map(sync =>
+            sync.id === action.id
+                ? {
+                    ...sync,
+                    logs: [
+                        ...sync.logs,
+                        {
+                            ...action.log,
+                            id: Date.now(),
+                            timestamp: new Date().toLocaleTimeString(),
+                        },
+                    ],
+                }
+                : sync
+            ),
         };
 
     case 'ADD_ENVIRONMENT': {

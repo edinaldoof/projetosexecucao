@@ -12,9 +12,9 @@ import {
   ChevronDown,
   ChevronUp,
   Database,
-  Calendar,
   Eye,
   Download,
+  Info,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApp, getApps, initializeApp } from 'firebase/app';
@@ -33,10 +33,8 @@ import {
 } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
-import { smartSyncNotifications } from '@/ai/flows/smart-sync-notifications';
 import { useSync, SyncInstance as SyncInstanceType, Environment } from '@/contexts/sync-context';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { ScrollArea } from './ui/scroll-area';
 
@@ -57,12 +55,14 @@ const StatusIcon = ({ status }: { status: SyncState }) => {
   }
 };
 
-const LogIcon = ({ status }: { status: 'success' | 'error' }) => {
+const LogIcon = ({ status }: { status: 'success' | 'error' | 'info' }) => {
   switch (status) {
     case 'success':
       return <CheckCircle className="h-4 w-4 text-green-500" />;
     case 'error':
       return <XCircle className="h-4 w-4 text-red-500" />;
+    case 'info':
+        return <Info className="h-4 w-4 text-blue-500" />;
   }
 };
 
@@ -70,25 +70,6 @@ type SyncInstanceProps = {
   sync: SyncInstanceType;
   env: Environment;
 };
-
-const getScheduleText = (env: Environment) => {
-  const { value, unit } = env.schedule;
-  let unitText = '';
-  switch(unit) {
-    case 'seconds': unitText = value === 1 ? 'segundo' : 'segundos'; break;
-    case 'minutes': unitText = value === 1 ? 'minuto' : 'minutos'; break;
-    case 'hours': unitText = value === 1 ? 'hora' : 'horas'; break;
-  }
-  return `A cada ${value} ${unitText}`;
-}
-
-const getScheduleDaysText = (env: Environment) => {
-  const { days } = env.schedule;
-  if (days.length === 0) {
-    return "Todos os dias";
-  }
-  return days.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(', ');
-}
 
 export default function SyncInstance({ sync, env }: SyncInstanceProps) {
   const { dispatch } = useSync();
@@ -140,8 +121,10 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     lastRunRef.current = Date.now();
 
     try {
-      dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 25 });
+      dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'info', message: 'Iniciando busca de dados na API de origem...' } });
+      dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 10 });
       const response = await fetch(env.url, { signal });
+      dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 25 });
 
       if (!response.ok) {
         throw new Error(`A resposta da rede não foi 'ok': ${response.statusText}`);
@@ -149,10 +132,13 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       
       const data = await response.json();
       setLastFetchedData(data); // Store the JSON object itself
+      dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'success', message: 'Dados JSON recebidos e processados com sucesso.' } });
       dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 50 });
 
-      const storageRef = ref(storage, `${env.firebasePath}/${new Date().toISOString()}.json`);
+      const storagePath = `${env.firebasePath}${new Date().toISOString()}.json`;
+      const storageRef = ref(storage, storagePath);
       const dataString = JSON.stringify(data, null, 2);
+      dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'info', message: `Iniciando upload para o Firebase em: ${storagePath}` } });
       await uploadString(storageRef, dataString, 'raw');
       
       dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 100 });
@@ -163,7 +149,6 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
         dispatch({ type: 'SYNC_ERROR', id: sync.id, error: 'Sincronização abortada pelo usuário.' });
       } else {
         const enhancedMessage = error.message;
-        // const { enhancedMessage } = await smartSyncNotifications({ errorMessage: error.message });
         dispatch({ type: 'SYNC_ERROR', id: sync.id, error: enhancedMessage });
         toast({
           variant: 'destructive',
