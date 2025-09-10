@@ -32,6 +32,18 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
+const getScheduleText = (env: Environment) => {
+  const { value, unit, days } = env.schedule;
+  let unitText = '';
+  switch(unit) {
+    case 'seconds': unitText = value === 1 ? 'segundo' : 'segundos'; break;
+    case 'minutes': unitText = value === 1 ? 'minuto' : 'minutos'; break;
+    case 'hours': unitText = value === 1 ? 'hora' : 'horas'; break;
+  }
+  const daysText = days.length > 0 ? ` (${days.join(', ')})` : '';
+  return `A cada ${value} ${unitText}${daysText}`;
+}
+
 export default function EnvironmentsManager() {
   const { state, dispatch } = useSync();
   const [editingEnvironment, setEditingEnvironment] = useState<Environment | null>(null);
@@ -53,7 +65,7 @@ export default function EnvironmentsManager() {
 
   const handleFormSave = (env: Environment) => {
     if (editingEnvironment) {
-      dispatch({ type: 'UPDATE_ENVIRONMENT', environment: env });
+      dispatch({ type: 'UPDATE_ENVIRONMENT', environment: { ...env, id: editingEnvironment.id } });
     } else {
       dispatch({ type: 'ADD_ENVIRONMENT', environment: env });
     }
@@ -84,8 +96,7 @@ export default function EnvironmentsManager() {
               <TableRow>
                 <TableHead>Nome da Conexão</TableHead>
                 <TableHead>Firebase Project ID</TableHead>
-                <TableHead>Storage Bucket</TableHead>
-                <TableHead>Intervalo (seg)</TableHead>
+                <TableHead>Agendamento</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -94,8 +105,7 @@ export default function EnvironmentsManager() {
                 <TableRow key={env.id}>
                   <TableCell className="font-medium">{env.name}</TableCell>
                   <TableCell className="font-mono text-sm">{env.firebaseConfig?.projectId || 'N/A'}</TableCell>
-                  <TableCell className="font-mono text-sm">{env.firebaseConfig?.storageBucket || 'N/A'}</TableCell>
-                  <TableCell>{env.syncInterval / 1000}</TableCell>
+                  <TableCell>{getScheduleText(env)}</TableCell>
                   <TableCell className="text-right space-x-2">
                     <Button variant="outline" size="icon" onClick={() => handleEdit(env)}>
                       <Edit className="h-4 w-4" />

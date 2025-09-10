@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronUp,
   Database,
+  Calendar,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApp, getApps, initializeApp } from 'firebase/app';
@@ -32,8 +33,11 @@ import { useToast } from '@/hooks/use-toast';
 import { smartSyncNotifications } from '@/ai/flows/smart-sync-notifications';
 import { useSync, SyncInstance as SyncInstanceType, Environment } from '@/contexts/sync-context';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 type SyncState = 'idle' | 'syncing' | 'success' | 'error';
+
+const dayMap: { [key: string]: number } = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
 
 const StatusIcon = ({ status }: { status: SyncState }) => {
   switch (status) {
@@ -62,11 +66,31 @@ type SyncInstanceProps = {
   env: Environment;
 };
 
+const getScheduleText = (env: Environment) => {
+  const { value, unit } = env.schedule;
+  let unitText = '';
+  switch(unit) {
+    case 'seconds': unitText = value === 1 ? 'segundo' : 'segundos'; break;
+    case 'minutes': unitText = value === 1 ? 'minuto' : 'minutos'; break;
+    case 'hours': unitText = value === 1 ? 'hora' : 'horas'; break;
+  }
+  return `A cada ${value} ${unitText}`;
+}
+
+const getScheduleDaysText = (env: Environment) => {
+  const { days } = env.schedule;
+  if (days.length === 0) {
+    return "Todos os dias";
+  }
+  return days.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(', ');
+}
+
 export default function SyncInstance({ sync, env }: SyncInstanceProps) {
   const { dispatch } = useSync();
   const { toast } = useToast();
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isLogsOpen, setIsLogsOpen] = useState(false);
+  const lastRunRef = useRef<number>(Date.now());
 
   const handleSync = useCallback(async () => {
     if (sync.isPaused) return;
@@ -94,6 +118,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     const signal = abortControllerRef.current.signal;
 
     dispatch({ type: 'START_SYNC', id: sync.id });
+    lastRunRef.current = Date.now();
 
     try {
       // Step 1: Fetching data from the source URL
@@ -131,7 +156,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     }
   }, [env, sync.id, sync.isPaused, toast, dispatch]);
 
-  useEffect(() => {
+ useEffect(() => {
     if (sync.isPaused) {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -139,9 +164,28 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       return;
     }
 
-    const timer = setInterval(handleSync, env.syncInterval);
+    const { value, unit, days } = env.schedule;
+    const intervalInMs = value * (unit === 'seconds' ? 1000 : unit === 'minutes' ? 60000 : 3600000);
+
+    const checkAndRun = () => {
+      const now = new Date();
+      const scheduledDays = days.map(d => dayMap[d]);
+
+      // Check if today is a scheduled day (if any are specified)
+      if (scheduledDays.length > 0 && !scheduledDays.includes(now.getDay())) {
+        return;
+      }
+      
+      // Check if the interval has passed since the last run
+      if (Date.now() - lastRunRef.current >= intervalInMs) {
+        handleSync();
+      }
+    };
+
+    // We check every second to see if a sync is due
+    const timer = setInterval(checkAndRun, 1000);
     return () => clearInterval(timer);
-  }, [sync.isPaused, env.syncInterval, handleSync]);
+  }, [sync.isPaused, env.schedule, handleSync]);
 
   return (
     <Card className="shadow-lg">
@@ -156,10 +200,25 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
             {sync.isPaused ? 'Pausado' : 'Ativo'}
           </Badge>
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="flex items-center gap-4">
+          <span>
           {sync.lastSync
             ? `Última sincronização em: ${new Date(sync.lastSync).toLocaleString()}`
             : 'Nenhuma sincronização realizada ainda.'}
+          </span>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex items-center gap-1 text-muted-foreground cursor-pointer">
+                  <Calendar className="h-4 w-4" />
+                  {getScheduleText(env)}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{getScheduleDaysText(env)}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </CardDescription>
       </CardHeader>
       <CardContent>

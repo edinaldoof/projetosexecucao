@@ -22,11 +22,19 @@ export type FirebaseConfig = {
     appId: string;
 };
 
+export type DayOfWeek = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat';
+
+export type SyncSchedule = {
+  value: number;
+  unit: 'seconds' | 'minutes' | 'hours';
+  days: DayOfWeek[];
+};
+
 export type Environment = {
   id: string;
   name: string;
   url: string;
-  syncInterval: number;
+  schedule: SyncSchedule;
   firebaseConfig: FirebaseConfig;
   firebasePath: string; // Path within the storage bucket
 };
@@ -67,7 +75,7 @@ const defaultEnvironments: Environment[] = [
     id: '1',
     name: 'Produção DB (Exemplo)',
     url: 'https://jsonplaceholder.typicode.com/todos/1',
-    syncInterval: 30000,
+    schedule: { value: 30, unit: 'seconds', days: [] },
     firebaseConfig: {
       projectId: "prod-project-123",
       appId: "1:prod:web:123",
@@ -82,7 +90,7 @@ const defaultEnvironments: Environment[] = [
     id: '2',
     name: 'Desenvolvimento DB (Exemplo)',
     url: 'https://jsonplaceholder.typicode.com/posts/1',
-    syncInterval: 60000,
+    schedule: { value: 1, unit: 'minutes', days: ['mon', 'wed', 'fri'] },
      firebaseConfig: {
       projectId: "dev-project-456",
       appId: "1:dev:web:456",
@@ -175,9 +183,8 @@ function syncReducer(state: State, action: Action): State {
       const newEnvironment: Environment = { 
         id: newId, 
         ...action.environment,
-        firebaseConfig: action.environment.firebaseConfig || {
-            apiKey: '', authDomain: '', projectId: '', storageBucket: '', messagingSenderId: '', appId: ''
-        }
+        firebaseConfig: action.environment.firebaseConfig || emptyFirebaseConfig,
+        schedule: action.environment.schedule || { value: 30, unit: 'seconds', days: [] },
       };
       const newSyncInstance: SyncInstance = {
         id: newId,
@@ -231,6 +238,12 @@ const emptyFirebaseConfig: FirebaseConfig = {
   appId: '',
 };
 
+const defaultSchedule: SyncSchedule = {
+  value: 30,
+  unit: 'seconds',
+  days: [],
+};
+
 
 export function SyncProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(syncReducer, initialState);
@@ -245,6 +258,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         parsedState.environments = parsedState.environments.map((env: any) => ({
             ...env,
             firebaseConfig: env.firebaseConfig || emptyFirebaseConfig,
+            // Migration for old structure to new schedule structure
+            schedule: env.schedule || {
+                value: env.syncInterval / 1000 || 30,
+                unit: 'seconds',
+                days: []
+            },
         }));
         
         parsedState.syncs.forEach((sync: SyncInstance) => {

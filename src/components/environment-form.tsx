@@ -16,19 +16,36 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Environment } from '@/contexts/sync-context';
+import { Environment, SyncSchedule } from '@/contexts/sync-context';
 import { Separator } from './ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Checkbox } from './ui/checkbox';
+
+const weekDays = [
+  { id: 'sun', label: 'D' },
+  { id: 'mon', label: 'S' },
+  { id: 'tue', label: 'T' },
+  { id: 'wed', label: 'Q' },
+  { id: 'thu', label: 'Q' },
+  { id: 'fri', label: 'S' },
+  { id: 'sat', label: 'S' },
+] as const;
 
 const formSchema = z.object({
   name: z.string().min(1, 'O nome é obrigatório.'),
   url: z.string().url('Por favor, insira uma URL válida.'),
-  syncInterval: z.coerce.number().int().positive('O intervalo deve ser um número positivo de segundos.'),
+  schedule: z.object({
+    value: z.coerce.number().int().positive('O intervalo deve ser um número positivo.'),
+    unit: z.enum(['seconds', 'minutes', 'hours']),
+    days: z.array(z.enum(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'])).default([]),
+  }),
   firebasePath: z.string().min(1, 'O caminho de destino no Storage é obrigatório.'),
   firebaseConfig: z.object({
       apiKey: z.string().min(1, "API Key é obrigatória."),
@@ -49,6 +66,12 @@ type EnvironmentFormProps = {
   environment: Environment | null;
 };
 
+const defaultSchedule: SyncSchedule = {
+  value: 30,
+  unit: 'seconds',
+  days: [],
+};
+
 export default function EnvironmentForm({
   isOpen,
   onOpenChange,
@@ -60,7 +83,7 @@ export default function EnvironmentForm({
     defaultValues: {
       name: '',
       url: '',
-      syncInterval: 30,
+      schedule: defaultSchedule,
       firebasePath: 'storage/data/',
       firebaseConfig: {
         apiKey: '',
@@ -74,29 +97,31 @@ export default function EnvironmentForm({
   });
 
   useEffect(() => {
-    if (environment) {
-      form.reset({
-        name: environment.name,
-        url: environment.url,
-        syncInterval: environment.syncInterval / 1000,
-        firebasePath: environment.firebasePath,
-        firebaseConfig: environment.firebaseConfig,
-      });
-    } else {
-      form.reset({
-        name: '',
-        url: '',
-        syncInterval: 30,
-        firebasePath: 'storage/data/',
-        firebaseConfig: {
-            apiKey: '',
-            authDomain: '',
-            projectId: '',
-            storageBucket: '',
-            messagingSenderId: '',
-            appId: '',
-        }
-      });
+    if (isOpen) {
+      if (environment) {
+        form.reset({
+          name: environment.name,
+          url: environment.url,
+          schedule: environment.schedule,
+          firebasePath: environment.firebasePath,
+          firebaseConfig: environment.firebaseConfig,
+        });
+      } else {
+        form.reset({
+          name: '',
+          url: '',
+          schedule: defaultSchedule,
+          firebasePath: 'storage/data/',
+          firebaseConfig: {
+              apiKey: '',
+              authDomain: '',
+              projectId: '',
+              storageBucket: '',
+              messagingSenderId: '',
+              appId: '',
+          }
+        });
+      }
     }
   }, [environment, form, isOpen]);
 
@@ -104,7 +129,6 @@ export default function EnvironmentForm({
     onSave({
       id: environment?.id || '', // ID will be generated in reducer for new envs
       ...data,
-      syncInterval: data.syncInterval * 1000, // Convert seconds to ms
     });
   };
 
@@ -114,7 +138,7 @@ export default function EnvironmentForm({
         <DialogHeader>
           <DialogTitle>{environment ? 'Editar Conexão' : 'Adicionar Nova Conexão'}</DialogTitle>
           <DialogDescription>
-            Preencha os detalhes da conexão de sincronização, incluindo as credenciais do projeto Firebase de destino.
+            Preencha os detalhes da conexão, agendamento e credenciais do projeto Firebase de destino.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -146,15 +170,88 @@ export default function EnvironmentForm({
                 </FormItem>
               )}
             />
-            <FormField
+
+            <Separator className="my-6" />
+            <h3 className="text-lg font-medium">Agendamento da Sincronização</h3>
+             <div className="flex items-end gap-2">
+                <FormField
+                control={form.control}
+                name="schedule.value"
+                render={({ field }) => (
+                    <FormItem className="flex-grow">
+                    <FormLabel>Intervalo</FormLabel>
+                    <FormControl>
+                        <Input type="number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
+                <FormField
+                control={form.control}
+                name="schedule.unit"
+                render={({ field }) => (
+                    <FormItem>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Unidade" />
+                        </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                        <SelectItem value="seconds">Segundos</SelectItem>
+                        <SelectItem value="minutes">Minutos</SelectItem>
+                        <SelectItem value="hours">Horas</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    </FormItem>
+                )}
+                />
+            </div>
+             <FormField
               control={form.control}
-              name="syncInterval"
-              render={({ field }) => (
+              name="schedule.days"
+              render={() => (
                 <FormItem>
-                  <FormLabel>Intervalo de Sincronização (segundos)</FormLabel>
-                  <FormControl>
-                    <Input type="number" {...field} />
-                  </FormControl>
+                  <div className="mb-4">
+                    <FormLabel className="text-base">Dias da Semana</FormLabel>
+                    <FormDescription>
+                      Selecione os dias para executar a sincronização. Se nenhum for selecionado, ela rodará todos os dias.
+                    </FormDescription>
+                  </div>
+                  <div className="flex items-center justify-around rounded-lg border p-2">
+                    {weekDays.map((day) => (
+                      <FormField
+                        key={day.id}
+                        control={form.control}
+                        name="schedule.days"
+                        render={({ field }) => {
+                          return (
+                            <FormItem
+                              key={day.id}
+                              className="flex flex-col items-center space-y-2"
+                            >
+                              <FormLabel className='font-normal'>{day.label}</FormLabel>
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value?.includes(day.id)}
+                                  onCheckedChange={(checked) => {
+                                    return checked
+                                      ? field.onChange([...(field.value || []), day.id])
+                                      : field.onChange(
+                                          (field.value || []).filter(
+                                            (value) => value !== day.id
+                                          )
+                                        )
+                                  }}
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )
+                        }}
+                      />
+                    ))}
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}
