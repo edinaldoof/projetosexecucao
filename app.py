@@ -5,9 +5,9 @@ from queries import fetch_table_data
 # Inicializa o aplicativo Flask
 app = Flask(__name__)
 
-# Habilita o CORS para a origem específica do localhost onde o app Next.js está rodando.
-# Isso é mais seguro que permitir '*', mas resolve o problema em desenvolvimento.
-CORS(app, resources={r"/api/*": {"origins": "http://localhost:777"}})
+# Habilita o CORS para a origem específica do IP de rede onde o app Next.js está rodando.
+# Isso é mais seguro que permitir '*', e resolve o problema de acesso pela rede.
+CORS(app, resources={r"/api/*": {"origins": "http://192.168.3.31:777"}})
 
 # Rota de teste para verificar se o servidor está no ar
 @app.route('/')
