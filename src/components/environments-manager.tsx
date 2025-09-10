@@ -41,7 +41,7 @@ const getScheduleText = (env: Environment) => {
     case 'minutes': unitText = value === 1 ? 'minuto' : 'minutos'; break;
     case 'hours': unitText = value === 1 ? 'hora' : 'horas'; break;
   }
-  const daysText = days.length > 0 ? ` (${days.join(', ')})` : '';
+  const daysText = days.length > 0 ? ` (dias: ${days.join(', ')})` : ' (todos os dias)';
   return `A cada ${value} ${unitText}${daysText}`;
 }
 
@@ -92,7 +92,7 @@ export default function EnvironmentsManager() {
               <span>Gerenciador de Conexões</span>
             </CardTitle>
             <CardDescription>
-              Adicione, edite ou remova suas conexões de sincronização. Cada conexão pode usar um projeto Firebase diferente.
+              Adicione, edite ou remova suas conexões de sincronização.
             </CardDescription>
           </div>
           <Button onClick={handleAdd}>
@@ -130,16 +130,15 @@ export default function EnvironmentsManager() {
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+                          <AlertDialogTitle>Você tem certeza absoluta?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Essa ação não pode ser desfeita. Isso irá remover permanentemente a conexão
-                             e todos os seus dados de sincronização associados.
+                            Essa ação não pode ser desfeita. Isso irá remover permanentemente a conexão e todos os seus dados.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancelar</AlertDialogCancel>
                           <AlertDialogAction onClick={() => handleDelete(env.id)}>
-                            Continuar
+                            Sim, remover
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
@@ -150,8 +149,8 @@ export default function EnvironmentsManager() {
             </TableBody>
           </Table>
            {state.environments.length === 0 && (
-            <p className="text-center text-muted-foreground mt-4">
-              Nenhuma conexão configurada. Adicione uma para começar.
+            <p className="text-center text-muted-foreground mt-4 py-4">
+              Nenhuma conexão configurada. Adicione uma para começar a sincronizar.
             </p>
           )}
         </CardContent>
