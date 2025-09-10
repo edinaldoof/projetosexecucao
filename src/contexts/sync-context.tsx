@@ -1,8 +1,9 @@
 'use client';
 
-import { environments } from "@/lib/environments";
-import { createContext, useContext, useReducer, ReactNode, Dispatch } from "react";
+import { createContext, useContext, useReducer, ReactNode, Dispatch, useEffect, useCallback } from "react";
+import { v4 as uuidv4 } from 'uuid';
 
+// Types
 export type SyncState = 'idle' | 'syncing' | 'success' | 'error';
 
 export type LogEntry = {
@@ -12,95 +13,180 @@ export type LogEntry = {
   timestamp: string;
 };
 
-export type SyncInstance = {
+export type Environment = {
   id: string;
+  name: string;
+  url: string;
+  firebaseTarget: string;
+  syncInterval: number;
+};
+
+export type SyncInstance = {
+  id: string; // Corresponds to Environment id
   isPaused: boolean;
   syncState: SyncState;
-  syncInterval: number;
   lastSync?: Date;
   syncProgress: number;
   logs: LogEntry[];
-  apiUrl: string;
-  firebaseTarget: string;
 };
 
 type State = {
+  environments: Environment[];
   syncs: SyncInstance[];
 };
 
 type Action =
+  | { type: 'INITIALIZE_STATE'; payload: State }
   | { type: 'TOGGLE_PAUSE'; id: string }
   | { type: 'START_SYNC'; id: string }
   | { type: 'SYNC_SUCCESS'; id: string }
   | { type: 'SYNC_ERROR'; id: string; error: string }
   | { type: 'UPDATE_PROGRESS'; id: string; progress: number }
-  | { type: 'SET_INTERVAL'; id: string; interval: number };
+  | { type: 'ADD_ENVIRONMENT'; environment: Omit<Environment, 'id'> }
+  | { type: 'UPDATE_ENVIRONMENT'; environment: Environment }
+  | { type: 'REMOVE_ENVIRONMENT'; id: string };
 
 const initialState: State = {
-  syncs: environments.map(env => ({
-    id: env.id,
-    isPaused: true,
-    syncState: 'idle',
-    syncInterval: 30000,
-    syncProgress: 0,
-    logs: [],
-    apiUrl: env.url,
-    firebaseTarget: env.firebaseTarget,
-  })),
+  environments: [],
+  syncs: [],
 };
 
-function syncReducer(state: State, action: Action): State {
-  return {
-    ...state,
-    syncs: state.syncs.map(sync => {
-      if (sync.id !== action.id) {
-        return sync;
-      }
+const defaultEnvironments: Environment[] = [
+  {
+    id: '1',
+    name: 'Produção DB (Exemplo)',
+    url: 'https://jsonplaceholder.typicode.com/todos/1',
+    firebaseTarget: 'storage/producao/',
+    syncInterval: 30000,
+  },
+  {
+    id: '2',
+    name: 'Desenvolvimento DB (Exemplo)',
+    url: 'https://jsonplaceholder.typicode.com/posts/1',
+    firebaseTarget: 'storage/desenvolvimento/',
+    syncInterval: 60000,
+  },
+  {
+    id: '3',
+    name: 'API de Teste (Falha)',
+    url: 'https://api.example.com/invalid-endpoint',
+    firebaseTarget: 'storage/testes_falha/',
+    syncInterval: 30000,
+  },
+];
 
-      switch (action.type) {
-        case 'TOGGLE_PAUSE':
-          return { ...sync, isPaused: !sync.isPaused, syncState: sync.isPaused ? 'idle' : 'idle' };
-        case 'START_SYNC':
-          return { ...sync, syncState: 'syncing', syncProgress: 0 };
-        case 'SYNC_SUCCESS':
-          return {
-            ...sync,
-            syncState: 'success',
-            lastSync: new Date(),
-            syncProgress: 100,
-            logs: [
-              {
-                id: Date.now(),
-                message: 'Sincronização concluída com sucesso.',
-                status: 'success',
-                timestamp: new Date().toLocaleTimeString(),
-              },
-              ...sync.logs,
-            ],
-          };
-        case 'SYNC_ERROR':
-          return {
-            ...sync,
-            syncState: 'error',
-            logs: [
-              {
-                id: Date.now(),
-                message: `Falha na sincronização: ${action.error}`,
-                status: 'error',
-                timestamp: new Date().toLocaleTimeString(),
-              },
-              ...sync.logs,
-            ],
-          };
-        case 'UPDATE_PROGRESS':
-          return { ...sync, syncProgress: action.progress };
-        case 'SET_INTERVAL':
-          return { ...sync, syncInterval: action.interval };
-        default:
-          return sync;
-      }
-    }),
-  };
+function syncReducer(state: State, action: Action): State {
+  switch (action.type) {
+    case 'INITIALIZE_STATE':
+        return action.payload;
+
+    case 'TOGGLE_PAUSE':
+      return {
+        ...state,
+        syncs: state.syncs.map(sync =>
+          sync.id === action.id ? { ...sync, isPaused: !sync.isPaused, syncState: 'idle' } : sync
+        ),
+      };
+
+    case 'START_SYNC':
+      return {
+        ...state,
+        syncs: state.syncs.map(sync =>
+          sync.id === action.id ? { ...sync, syncState: 'syncing', syncProgress: 0 } : sync
+        ),
+      };
+
+    case 'SYNC_SUCCESS':
+      return {
+        ...state,
+        syncs: state.syncs.map(sync =>
+          sync.id === action.id
+            ? {
+                ...sync,
+                syncState: 'success',
+                lastSync: new Date(),
+                syncProgress: 100,
+                logs: [
+                  {
+                    id: Date.now(),
+                    message: 'Sincronização concluída com sucesso.',
+                    status: 'success',
+                    timestamp: new Date().toLocaleTimeString(),
+                  },
+                  ...sync.logs,
+                ],
+              }
+            : sync
+        ),
+      };
+
+    case 'SYNC_ERROR':
+      return {
+        ...state,
+        syncs: state.syncs.map(sync =>
+          sync.id === action.id
+            ? {
+                ...sync,
+                syncState: 'error',
+                logs: [
+                  {
+                    id: Date.now(),
+                    message: `Falha na sincronização: ${action.error}`,
+                    status: 'error',
+                    timestamp: new Date().toLocaleTimeString(),
+                  },
+                  ...sync.logs,
+                ],
+              }
+            : sync
+        ),
+      };
+      
+    case 'UPDATE_PROGRESS':
+        return {
+          ...state,
+          syncs: state.syncs.map(sync =>
+            sync.id === action.id ? { ...sync, syncProgress: action.progress } : sync
+          ),
+        };
+
+    case 'ADD_ENVIRONMENT': {
+      const newId = uuidv4();
+      const newEnvironment: Environment = { ...action.environment, id: newId };
+      const newSyncInstance: SyncInstance = {
+        id: newId,
+        isPaused: true,
+        syncState: 'idle',
+        syncProgress: 0,
+        logs: [],
+      };
+      return {
+        ...state,
+        environments: [...state.environments, newEnvironment],
+        syncs: [...state.syncs, newSyncInstance],
+      };
+    }
+
+    case 'UPDATE_ENVIRONMENT': {
+      return {
+        ...state,
+        environments: state.environments.map(env =>
+          env.id === action.environment.id ? action.environment : env
+        ),
+      };
+    }
+
+    case 'REMOVE_ENVIRONMENT': {
+      return {
+        ...state,
+        environments: state.environments.filter(env => env.id !== action.id),
+        syncs: state.syncs.filter(sync => sync.id !== action.id),
+      };
+    }
+
+    default:
+      return state;
+  }
 }
 
 type SyncContextType = {
@@ -112,6 +198,51 @@ const SyncContext = createContext<SyncContextType | undefined>(undefined);
 
 export function SyncProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(syncReducer, initialState);
+
+  useEffect(() => {
+    try {
+      const storedState = localStorage.getItem('syncAppState');
+      if (storedState) {
+        const parsedState = JSON.parse(storedState);
+        // Ensure logs are not excessively long
+        parsedState.syncs.forEach((sync: SyncInstance) => {
+          if (sync.logs.length > 50) {
+            sync.logs = sync.logs.slice(0, 50);
+          }
+        });
+        dispatch({ type: 'INITIALIZE_STATE', payload: parsedState });
+      } else {
+        // Initialize with default environments if nothing is in localStorage
+         const initialSyncs: SyncInstance[] = defaultEnvironments.map(env => ({
+            id: env.id,
+            isPaused: true,
+            syncState: 'idle',
+            syncProgress: 0,
+            logs: [],
+        }));
+        dispatch({ type: 'INITIALIZE_STATE', payload: { environments: defaultEnvironments, syncs: initialSyncs } });
+      }
+    } catch (error) {
+      console.error("Failed to parse state from localStorage", error);
+       const initialSyncs: SyncInstance[] = defaultEnvironments.map(env => ({
+        id: env.id,
+        isPaused: true,
+        syncState: 'idle',
+        syncProgress: 0,
+        logs: [],
+    }));
+    dispatch({ type: 'INITIALIZE_STATE', payload: { environments: defaultEnvironments, syncs: initialSyncs } });
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('syncAppState', JSON.stringify(state));
+    } catch (error) {
+        console.error("Failed to save state to localStorage", error);
+    }
+  }, [state]);
+
 
   return (
     <SyncContext.Provider value={{ state, dispatch }}>

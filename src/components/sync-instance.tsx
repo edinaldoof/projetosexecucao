@@ -28,7 +28,7 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { smartSyncNotifications } from '@/ai/flows/smart-sync-notifications';
-import { useSync, SyncInstance as SyncInstanceType } from '@/contexts/sync-context';
+import { useSync, SyncInstance as SyncInstanceType, Environment } from '@/contexts/sync-context';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 
 type SyncState = 'idle' | 'syncing' | 'success' | 'error';
@@ -57,10 +57,10 @@ const LogIcon = ({ status }: { status: 'success' | 'error' }) => {
 
 type SyncInstanceProps = {
   sync: SyncInstanceType;
-  envName: string;
+  env: Environment;
 };
 
-export default function SyncInstance({ sync, envName }: SyncInstanceProps) {
+export default function SyncInstance({ sync, env }: SyncInstanceProps) {
   const { dispatch } = useSync();
   const { toast } = useToast();
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -84,7 +84,7 @@ export default function SyncInstance({ sync, envName }: SyncInstanceProps) {
         dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: i });
       }
 
-      const response = await fetch(sync.apiUrl, { signal });
+      const response = await fetch(env.url, { signal });
 
       if (!response.ok) {
         throw new Error(`A resposta da rede não foi 'ok': ${response.statusText}`);
@@ -105,14 +105,14 @@ export default function SyncInstance({ sync, envName }: SyncInstanceProps) {
         dispatch({ type: 'SYNC_ERROR', id: sync.id, error: enhancedMessage });
         toast({
           variant: 'destructive',
-          title: `Falha na Sincronização: ${envName}`,
+          title: `Falha na Sincronização: ${env.name}`,
           description: enhancedMessage,
         });
       }
     } finally {
       abortControllerRef.current = null;
     }
-  }, [sync.apiUrl, sync.id, sync.isPaused, envName, toast, dispatch]);
+  }, [env.url, env.name, sync.id, sync.isPaused, toast, dispatch]);
 
   useEffect(() => {
     if (sync.isPaused) {
@@ -122,15 +122,15 @@ export default function SyncInstance({ sync, envName }: SyncInstanceProps) {
       return;
     }
 
-    const timer = setInterval(handleSync, sync.syncInterval);
+    const timer = setInterval(handleSync, env.syncInterval);
     return () => clearInterval(timer);
-  }, [sync.isPaused, sync.syncInterval, handleSync]);
+  }, [sync.isPaused, env.syncInterval, handleSync]);
 
   return (
     <Card className="shadow-lg">
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          <span>{envName}</span>
+          <span>{env.name}</span>
           <Badge
             variant={sync.isPaused ? 'destructive' : 'default'}
             className="flex items-center gap-2"
@@ -141,7 +141,7 @@ export default function SyncInstance({ sync, envName }: SyncInstanceProps) {
         </CardTitle>
         <CardDescription>
           {sync.lastSync
-            ? `Última sincronização em: ${sync.lastSync.toLocaleString()}`
+            ? `Última sincronização em: ${new Date(sync.lastSync).toLocaleString()}`
             : 'Nenhuma sincronização realizada ainda.'}
         </CardDescription>
       </CardHeader>
@@ -151,14 +151,14 @@ export default function SyncInstance({ sync, envName }: SyncInstanceProps) {
             <div className="flex items-center gap-2">
               <HardDrive className="h-5 w-5" />
               <span className="font-medium text-foreground truncate max-w-xs">
-                {sync.apiUrl}
+                {env.url}
               </span>
             </div>
             <div className="flex-grow border-t border-dashed"></div>
             <div className="flex items-center gap-2">
                 <Cloud className="h-5 w-5" />
               <span className="font-medium text-foreground">
-                {sync.firebaseTarget}
+                {env.firebaseTarget}
               </span>
             </div>
           </div>
