@@ -31,6 +31,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { useToast } from '@/hooks/use-toast';
 
 const getScheduleText = (env: Environment) => {
   const { value, unit, days } = env.schedule;
@@ -46,6 +47,7 @@ const getScheduleText = (env: Environment) => {
 
 export default function EnvironmentsManager() {
   const { state, dispatch } = useSync();
+  const { toast } = useToast();
   const [editingEnvironment, setEditingEnvironment] = useState<Environment | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
 
@@ -61,6 +63,10 @@ export default function EnvironmentsManager() {
 
   const handleDelete = (id: string) => {
     dispatch({ type: 'REMOVE_ENVIRONMENT', id });
+    toast({
+        title: "Conexão Removida",
+        description: "A conexão foi removida com sucesso.",
+    });
   };
 
   const handleFormSave = (env: Environment) => {
@@ -70,6 +76,10 @@ export default function EnvironmentsManager() {
       dispatch({ type: 'ADD_ENVIRONMENT', environment: env });
     }
     setIsFormOpen(false);
+    toast({
+        title: "Conexão Salva!",
+        description: "Suas configurações de conexão foram salvas com sucesso.",
+    });
   };
 
   return (
