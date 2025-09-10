@@ -45,6 +45,8 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { environments } from '@/lib/environments';
+import { smartSyncNotifications } from '@/ai/flows/smart-sync-notifications';
+import FirebaseConnectionInfo from './firebase-connection-info';
 
 type SyncState = 'idle' | 'syncing' | 'success' | 'error';
 
@@ -232,46 +234,49 @@ export default function SyncManager() {
 
   const handleSync = useCallback(async () => {
     if (state.isPaused) return;
-
+  
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
-
+  
     dispatch({ type: 'START_SYNC' });
-
+  
     try {
-      // Simulate progress
       for (let i = 0; i <= 50; i += 10) {
-        if (signal.aborted) throw new Error('AbortError');
+        if (signal.aborted) throw new DOMException('Sincronização abortada pelo usuário.', 'AbortError');
         await new Promise(resolve => setTimeout(resolve, 200));
         dispatch({ type: 'UPDATE_PROGRESS', progress: i });
       }
-
+  
       const response = await fetch(state.apiUrl, { signal });
+  
       if (!response.ok) {
         throw new Error(`A resposta da rede não foi 'ok': ${response.statusText}`);
       }
-
-       // Simulate upload progress
+  
       for (let i = 50; i <= 100; i += 10) {
-        if (signal.aborted) throw new Error('AbortError');
+        if (signal.aborted) throw new DOMException('Sincronização abortada pelo usuário.', 'AbortError');
         await new Promise(resolve => setTimeout(resolve, 200));
         dispatch({ type: 'UPDATE_PROGRESS', progress: i });
       }
-
+  
       dispatch({ type: 'SYNC_SUCCESS' });
     } catch (error: any) {
-      if (error.message === 'AbortError') {
-        dispatch({ type: 'SYNC_ERROR', error: 'Sincronização cancelada pelo usuário.' });
-      } else {
+      if (error.name === 'AbortError') {
         dispatch({ type: 'SYNC_ERROR', error: error.message });
+      } else {
+        const { enhancedMessage } = await smartSyncNotifications({ errorMessage: error.message });
+        dispatch({ type: 'SYNC_ERROR', error: enhancedMessage });
         toast({
           variant: 'destructive',
           title: 'Falha na Sincronização',
-          description: error.message,
+          description: enhancedMessage,
         });
       }
     } finally {
-        abortControllerRef.current = null;
+      abortControllerRef.current = null;
     }
   }, [state.apiUrl, state.isPaused, toast]);
 
@@ -467,6 +472,10 @@ export default function SyncManager() {
             </Form>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="lg:col-span-3">
+        <FirebaseConnectionInfo />
       </div>
 
       <div className="lg:col-span-3">

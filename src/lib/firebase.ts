@@ -4,16 +4,16 @@ import { getStorage } from 'firebase/storage';
 // IMPORTANT: Add your Firebase project configuration to .env.local
 // See .env.example for a template.
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  projectId: "studio-5368005606-94de4",
+  appId: "1:181282457818:web:754a41b8ceb647d778bde3",
+  storageBucket: "studio-5368005606-94de4.firebasestorage.app",
+  apiKey: "AIzaSyD-KsDNyiTbJCBQj76XaxZ9irEK_7fdRhE",
+  authDomain: "studio-5368005606-94de4.firebaseapp.com",
+  messagingSenderId: "181282457818",
 };
 
 // Initialize Firebase
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const storage = getStorage(app);
 
-export { app, storage };
+export { app, storage, firebaseConfig };
