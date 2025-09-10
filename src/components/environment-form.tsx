@@ -27,9 +27,8 @@ import { Environment, SyncSchedule } from '@/contexts/sync-context';
 import { Separator } from './ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Checkbox } from './ui/checkbox';
-import { useToast } from '@/hooks/use-toast';
 import { getApp, initializeApp, deleteApp } from 'firebase/app';
-import { getStorage, ref } from 'firebase/storage';
+import { getStorage, ref, getMetadata } from 'firebase/storage';
 import { CheckCircle, Loader2, XCircle } from 'lucide-react';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction } from './ui/alert-dialog';
 
@@ -88,7 +87,6 @@ export default function EnvironmentForm({
   onSave,
   environment,
 }: EnvironmentFormProps) {
-  const { toast } = useToast();
   const [isTesting, setIsTesting] = useState(false);
   const [isTestResultOpen, setIsTestResultOpen] = useState(false);
   const [sourceTest, setSourceTest] = useState<TestResult>({ status: 'idle', message: '' });
@@ -161,22 +159,27 @@ export default function EnvironmentForm({
     }
 
     // 2. Test Firebase Connection
+    let testApp;
     try {
       if (!data.firebaseConfig || !data.firebaseConfig.projectId) {
         throw new Error('Configuração do Firebase (Project ID) está incompleta.');
       }
-      const app = initializeApp(data.firebaseConfig, appName);
-      const storage = getStorage(app);
-      ref(storage, data.firebasePath); // This doesn't upload, just creates a reference to validate path and config
-      setFirebaseTest({ status: 'success', message: 'Credenciais do Firebase e caminho do Storage validados com sucesso.' });
+      testApp = initializeApp(data.firebaseConfig, appName);
+      const storage = getStorage(testApp);
+      // We test by trying to get the metadata of the storage path. This requires a valid connection.
+      const storageRef = ref(storage, data.firebasePath);
+      await getMetadata(storageRef);
+      setFirebaseTest({ status: 'success', message: 'Conexão com o Firebase Storage estabelecida com sucesso.' });
     } catch (error: any) {
-      setFirebaseTest({ status: 'error', message: `Falha na validação do Firebase: ${error.message}` });
+        if (error.code === 'storage/object-not-found') {
+            // This is actually a success for connection testing, it means we connected and authenticated, but the folder/path doesn't exist yet.
+            setFirebaseTest({ status: 'success', message: 'Conexão com o Firebase Storage estabelecida. O caminho especificado ainda não existe, mas será criado na primeira sincronização.' });
+        } else {
+            setFirebaseTest({ status: 'error', message: `Falha na conexão com o Firebase: ${error.message}` });
+        }
     } finally {
-        try {
-            const testApp = getApp(appName);
+        if (testApp) {
             await deleteApp(testApp);
-        } catch (e) {
-            // App might have failed to initialize, so nothing to delete
         }
         setIsTesting(false);
         setIsTestResultOpen(true);
@@ -458,3 +461,5 @@ export default function EnvironmentForm({
     </>
   );
 }
+
+    
