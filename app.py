@@ -5,8 +5,8 @@ from queries import fetch_table_data
 # Inicializa o aplicativo Flask
 app = Flask(__name__)
 
-# Habilita o CORS para toda a aplicação.
-# Isso permitirá que o painel (em outra porta) acesse esta API.
+# Habilita o CORS para toda a aplicação, permitindo qualquer origem.
+# Isso é ideal para desenvolvimento e resolverá o problema de acesso.
 CORS(app)
 
 # Rota de teste para verificar se o servidor está no ar
@@ -21,7 +21,8 @@ def get_dados():
     Endpoint para buscar os dados da tabela Convenio.
     Retorna os dados em formato JSON ou um erro 500 em caso de falha.
     """
-    # Para requisições HEAD, apenas retornamos uma resposta de sucesso sem corpo.
+    # Para requisições HEAD (usadas no teste de conexão), 
+    # apenas retornamos uma resposta de sucesso sem corpo.
     from flask import request
     if request.method == 'HEAD':
         return '', 200
