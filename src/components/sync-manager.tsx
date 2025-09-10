@@ -1,6 +1,22 @@
-
 'use client';
 
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  CheckCircle,
+  Cloud,
+  HardDrive,
+  PauseCircle,
+  PlayCircle,
+  RefreshCw,
+  XCircle,
+  Clock,
+} from 'lucide-react';
+import { useCallback, useEffect, useReducer, useRef } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
@@ -10,39 +26,6 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import {
-  CheckCircle,
-  Clock,
-  Cloud,
-  HardDrive,
-  PauseCircle,
-  PlayCircle,
-  Power,
-  RefreshCw,
-  Server,
-  XCircle,
-} from 'lucide-react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { useCallback, useEffect, useReducer, useRef } from 'react';
-
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
-import { environments, type ApiEnvironment } from '@/lib/environments';
-import { useToast } from '@/hooks/use-toast';
-import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
-import {
   Form,
   FormControl,
   FormDescription,
@@ -51,6 +34,17 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import { environments } from '@/lib/environments';
 
 type SyncState = 'idle' | 'syncing' | 'success' | 'error';
 
@@ -85,7 +79,7 @@ type Action =
 const initialState: State = {
   isPaused: false,
   syncState: 'idle',
-  syncInterval: 5000, // 5 seconds
+  syncInterval: 30000,
   syncProgress: 0,
   logs: [],
   apiUrl: environments.find(e => e.id === '1')?.url || '',
@@ -102,11 +96,13 @@ function getIntervalInMs(value: string, unit: 'seconds' | 'minutes' | 'hours') {
     case 'hours':
       return numValue * 60 * 60 * 1000;
     default:
-      return 5000;
+      return 30000;
   }
 }
 
-function getIntervalFromMs(ms: number): [string, 'seconds' | 'minutes' | 'hours'] {
+function getIntervalFromMs(
+  ms: number
+): [string, 'seconds' | 'minutes' | 'hours'] {
   const seconds = ms / 1000;
   if (seconds < 60) return [String(seconds), 'seconds'];
   const minutes = seconds / 60;
@@ -118,7 +114,7 @@ function getIntervalFromMs(ms: number): [string, 'seconds' | 'minutes' | 'hours'
 function syncReducer(state: State, action: Action): State {
   switch (action.type) {
     case 'TOGGLE_PAUSE':
-      return { ...state, isPaused: !state.isPaused };
+      return { ...state, isPaused: !state.isPaused, syncState: state.isPaused ? 'idle' : 'idle' };
     case 'START_SYNC':
       return { ...state, syncState: 'syncing', syncProgress: 0 };
     case 'SYNC_SUCCESS':
@@ -159,7 +155,11 @@ function syncReducer(state: State, action: Action): State {
       return { ...state, apiUrl: action.url };
     case 'SET_ENVIRONMENT':
       const newEnv = environments.find(e => e.id === action.id);
-      return { ...state, currentEnvironmentId: action.id, apiUrl: newEnv?.url || state.apiUrl };
+      return {
+        ...state,
+        currentEnvironmentId: action.id,
+        apiUrl: newEnv?.url || state.apiUrl,
+      };
     default:
       return state;
   }
@@ -196,7 +196,7 @@ const LogIcon = ({ status }: { status: 'success' | 'error' }) => {
   }
 };
 
-export function SyncManager() {
+export default function SyncManager() {
   const [state, dispatch] = useReducer(syncReducer, initialState);
   const { toast } = useToast();
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -211,12 +211,17 @@ export function SyncManager() {
       apiUrl: state.apiUrl,
       currentEnvironmentId: state.currentEnvironmentId,
     },
+    values: {
+      intervalValue: intervalValue,
+      intervalUnit: intervalUnit,
+      apiUrl: state.apiUrl,
+      currentEnvironmentId: state.currentEnvironmentId
+    }
   });
 
   const onSubmit = (data: SettingsFormData) => {
     const newInterval = getIntervalInMs(data.intervalValue, data.intervalUnit);
     dispatch({ type: 'SET_INTERVAL', interval: newInterval });
-    dispatch({ type: 'SET_API_URL', url: data.apiUrl });
     dispatch({ type: 'SET_ENVIRONMENT', id: data.currentEnvironmentId });
 
     toast({
@@ -235,27 +240,27 @@ export function SyncManager() {
 
     try {
       // Simulate progress
-      for (let i = 0; i <= 100; i += 10) {
-        if (signal.aborted) {
-          console.log('Sync aborted');
-          return;
-        }
-        await new Promise(resolve => setTimeout(resolve, state.syncInterval / 10));
+      for (let i = 0; i <= 50; i += 10) {
+        if (signal.aborted) throw new Error('AbortError');
+        await new Promise(resolve => setTimeout(resolve, 200));
         dispatch({ type: 'UPDATE_PROGRESS', progress: i });
       }
 
       const response = await fetch(state.apiUrl, { signal });
-      if (signal.aborted) {
-        return;
-      }
       if (!response.ok) {
         throw new Error(`A resposta da rede não foi 'ok': ${response.statusText}`);
       }
 
-      // const data = await response.json();
+       // Simulate upload progress
+      for (let i = 50; i <= 100; i += 10) {
+        if (signal.aborted) throw new Error('AbortError');
+        await new Promise(resolve => setTimeout(resolve, 200));
+        dispatch({ type: 'UPDATE_PROGRESS', progress: i });
+      }
+
       dispatch({ type: 'SYNC_SUCCESS' });
     } catch (error: any) {
-      if (error.name === 'AbortError') {
+      if (error.message === 'AbortError') {
         dispatch({ type: 'SYNC_ERROR', error: 'Sincronização cancelada pelo usuário.' });
       } else {
         dispatch({ type: 'SYNC_ERROR', error: error.message });
@@ -265,8 +270,10 @@ export function SyncManager() {
           description: error.message,
         });
       }
+    } finally {
+        abortControllerRef.current = null;
     }
-  }, [state.apiUrl, state.isPaused, state.syncInterval, toast]);
+  }, [state.apiUrl, state.isPaused, toast]);
 
   useEffect(() => {
     if (state.isPaused) {
@@ -279,8 +286,10 @@ export function SyncManager() {
     const timer = setInterval(handleSync, state.syncInterval);
     return () => clearInterval(timer);
   }, [state.isPaused, state.syncInterval, handleSync]);
-  
-  const selectedEnv = environments.find(e => e.id === state.currentEnvironmentId);
+
+  const selectedEnv = environments.find(
+    e => e.id === state.currentEnvironmentId
+  );
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -298,7 +307,9 @@ export function SyncManager() {
               </Badge>
             </CardTitle>
             <CardDescription>
-              {state.lastSync ? `Última sincronização em: ${state.lastSync.toLocaleString()}` : 'Nenhuma sincronização realizada ainda.'}
+              {state.lastSync
+                ? `Última sincronização em: ${state.lastSync.toLocaleString()}`
+                : 'Nenhuma sincronização realizada ainda.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -307,12 +318,18 @@ export function SyncManager() {
                 <HardDrive className="h-6 w-6 text-gray-500" />
                 <span className="font-medium">Origem</span>
                 <div className="flex-grow border-t border-dashed"></div>
-                <span className="font-medium">{selectedEnv?.name || 'API Remota'}</span>
+                <span className="font-medium">
+                  {selectedEnv?.name || 'API Remota'}
+                </span>
                 <Cloud className="h-6 w-6 text-gray-500" />
               </div>
               <Progress value={state.syncProgress} className="w-full" />
               <div className="flex justify-between text-sm text-gray-500">
-                <span>{state.syncState === 'syncing' ? 'Sincronizando...' : 'Aguardando'}</span>
+                <span>
+                  {state.syncState === 'syncing'
+                    ? 'Sincronizando...'
+                    : 'Aguardando'}
+                </span>
                 <span>{state.syncProgress}%</span>
               </div>
             </div>
@@ -326,7 +343,11 @@ export function SyncManager() {
               )}
               {state.isPaused ? 'Retomar' : 'Pausar'}
             </Button>
-            <Button variant="outline" onClick={handleSync} disabled={state.syncState === 'syncing'}>
+            <Button
+              variant="outline"
+              onClick={handleSync}
+              disabled={state.syncState === 'syncing'}
+            >
               <RefreshCw className="mr-2 h-4 w-4" />
               Sincronizar Agora
             </Button>
@@ -341,7 +362,10 @@ export function SyncManager() {
           </CardHeader>
           <CardContent>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="space-y-6"
+              >
                 <FormField
                   control={form.control}
                   name="currentEnvironmentId"
@@ -349,11 +373,11 @@ export function SyncManager() {
                     <FormItem>
                       <FormLabel>Ambiente do Banco de Dados</FormLabel>
                       <Select
-                        onValueChange={(value) => {
+                        onValueChange={value => {
                           field.onChange(value);
                           const newEnv = environments.find(e => e.id === value);
                           if (newEnv) {
-                            form.setValue('apiUrl', newEnv.url);
+                            form.setValue('apiUrl', newEnv.url, { shouldValidate: true });
                           }
                         }}
                         defaultValue={field.value}
@@ -383,7 +407,11 @@ export function SyncManager() {
                     <FormItem>
                       <FormLabel>URL do GET de Consulta</FormLabel>
                       <FormControl>
-                        <Input placeholder="https://api.example.com/data" {...field} readOnly/>
+                        <Input
+                          placeholder="https://api.example.com/data"
+                          {...field}
+                          readOnly
+                        />
                       </FormControl>
                       <FormDescription>
                         Esta é a URL que será consultada.
@@ -412,7 +440,10 @@ export function SyncManager() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Unidade</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Unidade" />
@@ -446,10 +477,15 @@ export function SyncManager() {
           <CardContent className="h-64 overflow-y-auto">
             <div className="space-y-4">
               {state.logs.length === 0 ? (
-                <p className="text-sm text-gray-500 text-center">Nenhum log para exibir.</p>
+                <p className="text-sm text-gray-500 text-center">
+                  Nenhum log para exibir.
+                </p>
               ) : (
                 state.logs.map(log => (
-                  <div key={log.id} className="flex items-start gap-4 text-sm">
+                  <div
+                    key={log.id}
+                    className="flex items-start gap-4 text-sm"
+                  >
                     <LogIcon status={log.status} />
                     <div className="flex-grow">
                       <p className="font-medium">{log.message}</p>
