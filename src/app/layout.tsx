@@ -2,6 +2,8 @@ import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { SyncProvider } from '@/contexts/sync-context';
+import { AuthProvider } from '@/contexts/auth-context';
+import ProtectedRoute from '@/components/protected-route';
 
 export const metadata: Metadata = {
   title: 'Firebase Fadex',
@@ -21,9 +23,13 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased">
-        <SyncProvider>
-          {children}
-        </SyncProvider>
+        <AuthProvider>
+          <SyncProvider>
+            <ProtectedRoute>
+              {children}
+            </ProtectedRoute>
+          </SyncProvider>
+        </AuthProvider>
         <Toaster />
       </body>
     </html>
