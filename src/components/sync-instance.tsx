@@ -19,6 +19,8 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getStorage, ref, uploadString } from 'firebase/storage';
+import JSONPretty from 'react-json-pretty';
+import JSONPrettyMon from 'react-json-pretty/themes/monikai.css';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -94,12 +96,13 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
   const { toast } = useToast();
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isLogsOpen, setIsLogsOpen] = useState(false);
-  const [lastFetchedData, setLastFetchedData] = useState<string | null>(null);
+  const [lastFetchedData, setLastFetchedData] = useState<any | null>(null);
   const lastRunRef = useRef<number>(Date.now());
 
   const handleDownloadJson = () => {
     if (!lastFetchedData) return;
-    const blob = new Blob([lastFetchedData], { type: 'application/json' });
+    const dataString = JSON.stringify(lastFetchedData, null, 2);
+    const blob = new Blob([dataString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -124,7 +127,6 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       return;
     }
     
-    // Use a unique app name for each initialization to avoid conflicts
     const appName = `firebase-app-${env.id}`;
     const app = getApps().find(app => app.name === appName) || initializeApp(env.firebaseConfig, appName);
     const storage = getStorage(app);
@@ -139,7 +141,6 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     lastRunRef.current = Date.now();
 
     try {
-      // Step 1: Fetching data from the source URL
       dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 25 });
       const response = await fetch(env.url, { signal });
 
@@ -148,13 +149,12 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       }
       
       const data = await response.json();
-      const dataString = JSON.stringify(data, null, 2); // Pretty print JSON
-      setLastFetchedData(dataString);
+      setLastFetchedData(data); // Store the JSON object itself
       dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 50 });
 
-      // Step 2: Uploading data to Firebase Storage
-      const storageRef = ref(storage, env.firebasePath);
-      await uploadString(storageRef, JSON.stringify(data), 'raw');
+      const storageRef = ref(storage, `${env.firebasePath}/${new Date().toISOString()}.json`);
+      const dataString = JSON.stringify(data, null, 2);
+      await uploadString(storageRef, dataString, 'raw');
       
       dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 100 });
       
@@ -191,105 +191,93 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       const now = new Date();
       const scheduledDays = days.map(d => dayMap[d]);
 
-      // Check if today is a scheduled day (if any are specified)
       if (scheduledDays.length > 0 && !scheduledDays.includes(now.getDay())) {
         return;
       }
       
-      // Check if the interval has passed since the last run
       if (Date.now() - lastRunRef.current >= intervalInMs) {
         handleSync();
       }
     };
 
-    // We check every second to see if a sync is due
     const timer = setInterval(checkAndRun, 1000);
     return () => clearInterval(timer);
   }, [sync.isPaused, env.schedule, handleSync]);
 
   return (
-    <Card className="shadow-lg">
+    <Card className="shadow-lg w-full">
       <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span className="text-2xl font-bold">{env.name}</span>
-          <Badge
-            variant={sync.isPaused ? 'destructive' : 'default'}
-            className="flex items-center gap-2"
-          >
-            <StatusIcon status={sync.syncState} />
-            {sync.isPaused ? 'Pausado' : 'Ativo'}
-          </Badge>
-        </CardTitle>
-        <CardDescription className="flex items-center gap-4 pt-1">
-          <span>
-          {sync.lastSync
-            ? `Última sincronização: ${new Date(sync.lastSync).toLocaleString()}`
-            : 'Nenhuma sincronização realizada ainda.'}
-          </span>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="flex items-center gap-1 text-muted-foreground cursor-pointer">
-                  <Calendar className="h-4 w-4" />
-                  {getScheduleText(env)}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{getScheduleDaysText(env)}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </CardDescription>
+        <div className="flex items-start justify-between">
+            <div>
+                 <CardTitle className="text-2xl font-bold text-primary mb-1">{env.name}</CardTitle>
+                <CardDescription>
+                  {sync.lastSync
+                    ? `Última sincronização: ${new Date(sync.lastSync).toLocaleString()}`
+                    : 'Nenhuma sincronização realizada ainda.'}
+                </CardDescription>
+            </div>
+            <Badge
+                variant={sync.isPaused ? 'destructive' : 'default'}
+                className="flex items-center gap-2"
+            >
+                <StatusIcon status={sync.syncState} />
+                {sync.isPaused ? 'Pausado' : 'Ativo'}
+            </Badge>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <HardDrive className="h-5 w-5" />
-              <span className="font-medium text-foreground truncate max-w-xs">
-                {env.url}
-              </span>
+            <div className="flex items-center justify-between gap-4 p-3 border rounded-lg">
+                <div className="flex items-center gap-3 text-sm">
+                    <HardDrive className="h-5 w-5 text-muted-foreground" />
+                    <span className="font-mono text-xs truncate max-w-[200px] sm:max-w-xs" title={env.url}>
+                        {env.url}
+                    </span>
+                </div>
+                 <div className="text-primary font-bold text-lg">→</div>
+                <div className="flex items-center gap-3 text-sm">
+                    <Database className="h-5 w-5 text-muted-foreground" />
+                    <span className="font-mono text-xs truncate max-w-[200px] sm:max-w-xs" title={env.firebaseConfig.projectId}>
+                        {env.firebaseConfig.projectId}
+                    </span>
+                </div>
             </div>
-            <div className="flex-grow border-t border-dashed"></div>
-            <div className="flex items-center gap-2">
-                <Database className="h-5 w-5" />
-              <span className="font-medium text-foreground truncate max-w-xs">
-                {env.firebaseConfig.projectId}
-              </span>
+
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Cloud className="h-5 w-5" />
+                <span className="font-mono text-xs">
+                    {env.firebaseConfig.storageBucket}/{env.firebasePath}
+                </span>
             </div>
-          </div>
-           <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-             <Cloud className="h-5 w-5" />
-             <span className="font-mono text-xs">
-                {env.firebaseConfig.storageBucket}/{env.firebasePath}
-             </span>
-            </div>
+
           <Progress value={sync.syncProgress} className="w-full" />
           <div className="flex justify-between text-sm text-gray-500">
             <span>
               {sync.syncState === 'syncing'
                 ? 'Sincronizando...'
-                : 'Aguardando'}
+                : sync.isPaused 
+                ? 'Pausado'
+                : 'Aguardando agendamento'}
             </span>
             <span>{sync.syncProgress}%</span>
           </div>
         </div>
       </CardContent>
       <CardFooter className="flex flex-col items-start gap-4">
-        <div className="flex justify-between w-full">
-            <Button onClick={() => dispatch({ type: 'TOGGLE_PAUSE', id: sync.id })}>
+        <div className="grid grid-cols-3 gap-2 w-full">
+            <Button onClick={() => dispatch({ type: 'TOGGLE_PAUSE', id: sync.id })} className="w-full">
               {sync.isPaused ? (
-                <PlayCircle className="mr-2 h-4 w-4" />
+                <PlayCircle />
               ) : (
-                <PauseCircle className="mr-2 h-4 w-4" />
+                <PauseCircle/>
               )}
               {sync.isPaused ? 'Retomar' : 'Pausar'}
             </Button>
 
             <Dialog>
                 <DialogTrigger asChild>
-                    <Button variant="outline" disabled={!lastFetchedData}>
-                        <Eye className="mr-2 h-4 w-4" />
+                    <Button variant="outline" disabled={!lastFetchedData} className="w-full">
+                        <Eye />
                         Visualizar Dados
                     </Button>
                 </DialogTrigger>
@@ -300,14 +288,12 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
                             Estes são os dados obtidos da URL de origem na última sincronização bem-sucedida.
                         </DialogDescription>
                     </DialogHeader>
-                    <ScrollArea className="flex-grow border rounded-md p-4 bg-secondary/50">
-                        <pre>
-                            <code>{lastFetchedData}</code>
-                        </pre>
+                    <ScrollArea className="flex-grow border rounded-md p-1 bg-secondary/50">
+                       <JSONPretty data={lastFetchedData} theme={JSONPrettyMon} mainStyle="padding:1em" valueStyle="font-size:1.1em" />
                     </ScrollArea>
                     <DialogFooter>
                         <Button onClick={handleDownloadJson}>
-                            <Download className="mr-2 h-4 w-4" />
+                            <Download />
                             Baixar JSON
                         </Button>
                     </DialogFooter>
@@ -318,35 +304,36 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
               variant="outline"
               onClick={handleSync}
               disabled={sync.syncState === 'syncing'}
+              className="w-full"
             >
-              <RefreshCw className="mr-2 h-4 w-4" />
+              <RefreshCw />
               Sincronizar Agora
             </Button>
         </div>
          <Collapsible open={isLogsOpen} onOpenChange={setIsLogsOpen} className="w-full">
             <CollapsibleTrigger asChild>
-                <Button variant="ghost" className="w-full flex justify-center items-center gap-2">
+                <Button variant="ghost" className="w-full flex justify-center items-center gap-2 text-sm font-normal">
                     {isLogsOpen ? <ChevronUp/> : <ChevronDown/>}
                     <span>Logs de Sincronização</span>
                 </Button>
             </CollapsibleTrigger>
             <CollapsibleContent>
-                <div className="h-64 overflow-y-auto border rounded-md p-4 mt-2">
+                <div className="h-64 overflow-y-auto border rounded-md p-4 mt-2 bg-secondary/50">
                     <div className="space-y-4">
                     {sync.logs.length === 0 ? (
-                        <p className="text-sm text-gray-500 text-center">
+                        <p className="text-sm text-muted-foreground text-center py-4">
                         Nenhum log para exibir.
                         </p>
                     ) : (
                         sync.logs.map(log => (
                         <div
                             key={log.id}
-                            className="flex items-start gap-4 text-sm"
+                            className="flex items-start gap-4 text-sm font-mono"
                         >
                             <LogIcon status={log.status} />
                             <div className="flex-grow">
                             <p className="font-medium">{log.message}</p>
-                            <p className="text-gray-500">{log.timestamp}</p>
+                            <p className="text-muted-foreground text-xs">{log.timestamp}</p>
                             </div>
                         </div>
                         ))
