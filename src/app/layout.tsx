@@ -4,7 +4,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { SyncProvider } from '@/contexts/sync-context';
 
 export const metadata: Metadata = {
-  title: 'Firebase Syncer',
+  title: 'Firebase Fadex',
   description: 'Sincroniza dados de uma API local para o Firebase Storage.',
 };
 

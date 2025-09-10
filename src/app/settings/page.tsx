@@ -5,8 +5,8 @@ import SettingsManager from '@/components/settings-manager';
 
 export default function SettingsPage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8 md:p-24 bg-background">
-      <div className="w-full max-w-2xl space-y-6">
+    <main className="flex min-h-screen flex-col p-4 sm:p-8 md:p-12 bg-background">
+      <div className="w-full space-y-6">
         <header className="flex justify-between items-center text-left mb-6">
           <div className="flex items-center gap-4">
              <Button asChild variant="outline" size="icon">
