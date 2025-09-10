@@ -150,7 +150,7 @@ export default function SyncInstance({ sync, envName }: SyncInstanceProps) {
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <HardDrive className="h-5 w-5" />
-              <span className="font-medium text-foreground">
+              <span className="font-medium text-foreground truncate max-w-xs">
                 {sync.apiUrl}
               </span>
             </div>
