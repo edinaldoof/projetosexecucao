@@ -20,7 +20,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getStorage, ref, uploadString } from 'firebase/storage';
 import JSONPretty from 'react-json-pretty';
-import JSONPrettyMon from 'react-json-pretty/themes/monikai.css';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -289,7 +288,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
                         </DialogDescription>
                     </DialogHeader>
                     <ScrollArea className="flex-grow border rounded-md p-1 bg-secondary/50">
-                       <JSONPretty data={lastFetchedData} theme={JSONPrettyMon} mainStyle="padding:1em" valueStyle="font-size:1.1em" />
+                       <JSONPretty data={lastFetchedData} mainStyle="padding:1em" valueStyle="font-size:1.1em" />
                     </ScrollArea>
                     <DialogFooter>
                         <Button onClick={handleDownloadJson}>
