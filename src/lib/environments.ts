@@ -9,19 +9,5 @@ export type ApiEnvironment = {
   syncInterval: number;
 };
 
-export const environments: ApiEnvironment[] = [
-  {
-    id: '1',
-    name: 'Produção DB (Exemplo)',
-    url: 'https://jsonplaceholder.typicode.com/todos/1',
-    firebaseTarget: 'storage/producao/',
-    syncInterval: 30000,
-  },
-  {
-    id: '2',
-    name: 'Desenvolvimento DB (Exemplo)',
-    url: 'https://jsonplaceholder.typicode.com/posts/1',
-    firebaseTarget: 'storage/desenvolvimento/',
-    syncInterval: 60000,
-  },
-];
+// This is now empty, as we want the user to start with a clean slate in a production-like environment.
+export const environments: ApiEnvironment[] = [];

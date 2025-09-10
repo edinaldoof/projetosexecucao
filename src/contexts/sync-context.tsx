@@ -79,38 +79,7 @@ const emptyFirebaseConfig: FirebaseConfig = {
 };
 
 // Default values are for example purposes only.
-const defaultEnvironments: Environment[] = [
-  {
-    id: '1',
-    name: 'Produção DB (Exemplo)',
-    url: 'https://jsonplaceholder.typicode.com/todos/1',
-    schedule: { value: 30, unit: 'seconds', days: [] },
-    firebaseConfig: {
-      projectId: "prod-project-123",
-      appId: "1:prod:web:123",
-      storageBucket: "prod-project-123.appspot.com",
-      apiKey: "prod-key-123",
-      authDomain: "prod-project-123.firebaseapp.com",
-      messagingSenderId: "12345",
-    },
-    firebasePath: 'storage/producao/',
-  },
-  {
-    id: '2',
-    name: 'Desenvolvimento DB (Exemplo)',
-    url: 'https://jsonplaceholder.typicode.com/posts/1',
-    schedule: { value: 1, unit: 'minutes', days: ['mon', 'wed', 'fri'] },
-     firebaseConfig: {
-      projectId: "dev-project-456",
-      appId: "1:dev:web:456",
-      storageBucket: "dev-project-456.appspot.com",
-      apiKey: "dev-key-456",
-      authDomain: "dev-project-456.firebaseapp.com",
-      messagingSenderId: "67890",
-    },
-    firebasePath: 'storage/desenvolvimento/',
-  },
-];
+const defaultEnvironments: Environment[] = [];
 
 function syncReducer(state: State, action: Action): State {
   switch (action.type) {
@@ -270,6 +239,23 @@ const loadState = (): State => {
             schedule: env.schedule || { value: 30, unit: 'seconds', days: [] },
         }));
         
+        // Ensure syncs and environments are aligned
+        const envIds = new Set(parsedState.environments.map((e: Environment) => e.id));
+        parsedState.syncs = parsedState.syncs.filter((s: SyncInstance) => envIds.has(s.id));
+        
+        parsedState.environments.forEach((env: Environment) => {
+            const syncExists = parsedState.syncs.some((s: SyncInstance) => s.id === env.id);
+            if (!syncExists) {
+                parsedState.syncs.push({
+                    id: env.id,
+                    isPaused: true,
+                    syncState: 'idle',
+                    syncProgress: 0,
+                    logs: [],
+                });
+            }
+        });
+
         parsedState.syncs.forEach((sync: SyncInstance) => {
           if (sync.logs && sync.logs.length > 50) {
             sync.logs = sync.logs.slice(0, 50);

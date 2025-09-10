@@ -20,7 +20,7 @@ export default function SettingsPage() {
                 Configurações Globais
                 </h1>
                 <p className="mt-3 text-lg text-muted-foreground">
-                Visualize as informações da sua conexão com o Firebase.
+                Visualize e gerencie suas conexões de sincronização.
                 </p>
             </div>
           </div>

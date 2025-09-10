@@ -200,10 +200,10 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
             {sync.isPaused ? 'Pausado' : 'Ativo'}
           </Badge>
         </CardTitle>
-        <CardDescription className="flex items-center gap-4">
+        <CardDescription className="flex items-center gap-4 pt-1">
           <span>
           {sync.lastSync
-            ? `Última sincronização em: ${new Date(sync.lastSync).toLocaleString()}`
+            ? `Última sincronização: ${new Date(sync.lastSync).toLocaleString()}`
             : 'Nenhuma sincronização realizada ainda.'}
           </span>
           <TooltipProvider>
