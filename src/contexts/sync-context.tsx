@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 export type SyncState = 'idle' | 'syncing' | 'success' | 'error';
 
 export type LogEntry = {
-  id: number;
+  id: string; // Changed to string to accommodate UUID
   message: string;
   status: 'success' | 'error' | 'info';
   timestamp: string;
@@ -116,7 +116,7 @@ function syncReducer(state: State, action: Action): State {
                 logs: [
                   ...sync.logs,
                   {
-                    id: Date.now(),
+                    id: uuidv4(),
                     message: 'Sincronização concluída com sucesso.',
                     status: 'success',
                     timestamp: new Date().toLocaleTimeString(),
@@ -138,7 +138,7 @@ function syncReducer(state: State, action: Action): State {
                 logs: [
                   ...sync.logs,
                   {
-                    id: Date.now(),
+                    id: uuidv4(),
                     message: `Falha na sincronização: ${action.error}`,
                     status: 'error',
                     timestamp: new Date().toLocaleTimeString(),
@@ -168,7 +168,7 @@ function syncReducer(state: State, action: Action): State {
                         ...sync.logs,
                         {
                             ...action.log,
-                            id: Date.now(),
+                            id: uuidv4(),
                             timestamp: new Date().toLocaleTimeString(),
                         },
                     ],
