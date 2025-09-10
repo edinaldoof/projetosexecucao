@@ -13,6 +13,8 @@ import {
   ChevronUp,
   Database,
   Calendar,
+  Eye,
+  Download,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApp, getApps, initializeApp } from 'firebase/app';
@@ -34,6 +36,8 @@ import { smartSyncNotifications } from '@/ai/flows/smart-sync-notifications';
 import { useSync, SyncInstance as SyncInstanceType, Environment } from '@/contexts/sync-context';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { ScrollArea } from './ui/scroll-area';
 
 type SyncState = 'idle' | 'syncing' | 'success' | 'error';
 
@@ -90,7 +94,21 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
   const { toast } = useToast();
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isLogsOpen, setIsLogsOpen] = useState(false);
+  const [lastFetchedData, setLastFetchedData] = useState<string | null>(null);
   const lastRunRef = useRef<number>(Date.now());
+
+  const handleDownloadJson = () => {
+    if (!lastFetchedData) return;
+    const blob = new Blob([lastFetchedData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${env.name.replace(/\s+/g, '_')}_${new Date().toISOString()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const handleSync = useCallback(async () => {
     if (sync.isPaused) return;
@@ -130,6 +148,8 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       }
       
       const data = await response.json();
+      const dataString = JSON.stringify(data, null, 2); // Pretty print JSON
+      setLastFetchedData(dataString);
       dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 50 });
 
       // Step 2: Uploading data to Firebase Storage
@@ -191,7 +211,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     <Card className="shadow-lg">
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          <span>{env.name}</span>
+          <span className="text-2xl font-bold">{env.name}</span>
           <Badge
             variant={sync.isPaused ? 'destructive' : 'default'}
             className="flex items-center gap-2"
@@ -265,6 +285,35 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
               )}
               {sync.isPaused ? 'Retomar' : 'Pausar'}
             </Button>
+
+            <Dialog>
+                <DialogTrigger asChild>
+                    <Button variant="outline" disabled={!lastFetchedData}>
+                        <Eye className="mr-2 h-4 w-4" />
+                        Visualizar Dados
+                    </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
+                    <DialogHeader>
+                        <DialogTitle>Preview dos Dados JSON</DialogTitle>
+                        <DialogDescription>
+                            Estes são os dados obtidos da URL de origem na última sincronização bem-sucedida.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <ScrollArea className="flex-grow border rounded-md p-4 bg-secondary/50">
+                        <pre>
+                            <code>{lastFetchedData}</code>
+                        </pre>
+                    </ScrollArea>
+                    <DialogFooter>
+                        <Button onClick={handleDownloadJson}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Baixar JSON
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <Button
               variant="outline"
               onClick={handleSync}
