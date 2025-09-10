@@ -52,7 +52,7 @@ type Action =
   | { type: 'SYNC_SUCCESS'; id: string }
   | { type: 'SYNC_ERROR'; id: string; error: string }
   | { type: 'UPDATE_PROGRESS'; id: string; progress: number }
-  | { type: 'ADD_ENVIRONMENT'; environment: Omit<Environment, 'id'> }
+  | { type: 'ADD_ENVIRONMENT'; environment: Omit<Environment, 'id'> & { id?: string } }
   | { type: 'UPDATE_ENVIRONMENT'; environment: Environment }
   | { type: 'REMOVE_ENVIRONMENT'; id: string };
 
@@ -172,7 +172,13 @@ function syncReducer(state: State, action: Action): State {
 
     case 'ADD_ENVIRONMENT': {
       const newId = uuidv4();
-      const newEnvironment: Environment = { ...action.environment, id: newId };
+      const newEnvironment: Environment = { 
+        id: newId, 
+        ...action.environment,
+        firebaseConfig: action.environment.firebaseConfig || {
+            apiKey: '', authDomain: '', projectId: '', storageBucket: '', messagingSenderId: '', appId: ''
+        }
+      };
       const newSyncInstance: SyncInstance = {
         id: newId,
         isPaused: true,
