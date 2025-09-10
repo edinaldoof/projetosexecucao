@@ -124,7 +124,7 @@ export default function EnvironmentForm({
               name="firebaseTarget"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Destino no Firebase</FormLabel>
+                  <FormLabel>Destino no Firebase Storage (caminho)</FormLabel>
                   <FormControl>
                     <Input placeholder="storage/producao/" {...field} />
                   </FormControl>
