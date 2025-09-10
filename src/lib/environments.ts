@@ -24,11 +24,4 @@ export const environments: ApiEnvironment[] = [
     firebaseTarget: 'storage/desenvolvimento/',
     syncInterval: 60000,
   },
-  {
-    id: '3',
-    name: 'API de Teste (Falha)',
-    url: 'https://api.example.com/invalid-endpoint',
-    firebaseTarget: 'storage/testes_falha/',
-    syncInterval: 30000,
-  },
 ];
