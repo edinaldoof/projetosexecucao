@@ -162,7 +162,8 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       if (error.name === 'AbortError') {
         dispatch({ type: 'SYNC_ERROR', id: sync.id, error: 'Sincronização abortada pelo usuário.' });
       } else {
-        const { enhancedMessage } = await smartSyncNotifications({ errorMessage: error.message });
+        const enhancedMessage = error.message;
+        // const { enhancedMessage } = await smartSyncNotifications({ errorMessage: error.message });
         dispatch({ type: 'SYNC_ERROR', id: sync.id, error: enhancedMessage });
         toast({
           variant: 'destructive',
