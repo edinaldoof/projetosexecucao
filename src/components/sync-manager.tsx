@@ -10,6 +10,8 @@ import {
   RefreshCw,
   XCircle,
   Clock,
+  Database,
+  Link,
 } from 'lucide-react';
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { useForm } from 'react-hook-form';
@@ -172,6 +174,7 @@ const formSchema = z.object({
   intervalUnit: z.enum(['seconds', 'minutes', 'hours']),
   apiUrl: z.string().url('Por favor, insira uma URL válida.'),
   currentEnvironmentId: z.string(),
+  firebaseTarget: z.string(),
 });
 
 type SettingsFormData = z.infer<typeof formSchema>;
@@ -203,6 +206,10 @@ export default function SyncManager() {
   const { toast } = useToast();
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  const selectedEnv = environments.find(
+    e => e.id === state.currentEnvironmentId
+  );
+
   const [intervalValue, intervalUnit] = getIntervalFromMs(state.syncInterval);
 
   const form = useForm<SettingsFormData>({
@@ -212,12 +219,14 @@ export default function SyncManager() {
       intervalUnit: intervalUnit,
       apiUrl: state.apiUrl,
       currentEnvironmentId: state.currentEnvironmentId,
+      firebaseTarget: selectedEnv?.firebaseTarget || '',
     },
     values: {
       intervalValue: intervalValue,
       intervalUnit: intervalUnit,
       apiUrl: state.apiUrl,
-      currentEnvironmentId: state.currentEnvironmentId
+      currentEnvironmentId: state.currentEnvironmentId,
+      firebaseTarget: selectedEnv?.firebaseTarget || '',
     }
   });
 
@@ -234,34 +243,34 @@ export default function SyncManager() {
 
   const handleSync = useCallback(async () => {
     if (state.isPaused) return;
-  
+
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
-  
+
     dispatch({ type: 'START_SYNC' });
-  
+
     try {
       for (let i = 0; i <= 50; i += 10) {
         if (signal.aborted) throw new DOMException('Sincronização abortada pelo usuário.', 'AbortError');
         await new Promise(resolve => setTimeout(resolve, 200));
         dispatch({ type: 'UPDATE_PROGRESS', progress: i });
       }
-  
+
       const response = await fetch(state.apiUrl, { signal });
-  
+
       if (!response.ok) {
         throw new Error(`A resposta da rede não foi 'ok': ${response.statusText}`);
       }
-  
+
       for (let i = 50; i <= 100; i += 10) {
         if (signal.aborted) throw new DOMException('Sincronização abortada pelo usuário.', 'AbortError');
         await new Promise(resolve => setTimeout(resolve, 200));
         dispatch({ type: 'UPDATE_PROGRESS', progress: i });
       }
-  
+
       dispatch({ type: 'SYNC_SUCCESS' });
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -292,10 +301,6 @@ export default function SyncManager() {
     return () => clearInterval(timer);
   }, [state.isPaused, state.syncInterval, handleSync]);
 
-  const selectedEnv = environments.find(
-    e => e.id === state.currentEnvironmentId
-  );
-
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <div className="lg:col-span-2">
@@ -319,14 +324,20 @@ export default function SyncManager() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <HardDrive className="h-6 w-6 text-gray-500" />
-                <span className="font-medium">Origem</span>
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <HardDrive className="h-5 w-5" />
+                  <span className="font-medium text-foreground">
+                    {selectedEnv?.name || 'API Remota'}
+                  </span>
+                </div>
                 <div className="flex-grow border-t border-dashed"></div>
-                <span className="font-medium">
-                  {selectedEnv?.name || 'API Remota'}
-                </span>
-                <Cloud className="h-6 w-6 text-gray-500" />
+                <div className="flex items-center gap-2">
+                   <Cloud className="h-5 w-5" />
+                  <span className="font-medium text-foreground">
+                    {selectedEnv?.firebaseTarget || 'Destino não definido'}
+                  </span>
+                </div>
               </div>
               <Progress value={state.syncProgress} className="w-full" />
               <div className="flex justify-between text-sm text-gray-500">
@@ -376,13 +387,14 @@ export default function SyncManager() {
                   name="currentEnvironmentId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Ambiente do Banco de Dados</FormLabel>
+                      <FormLabel className="flex items-center gap-2"><Database/> Ambiente de Origem</FormLabel>
                       <Select
                         onValueChange={value => {
                           field.onChange(value);
                           const newEnv = environments.find(e => e.id === value);
                           if (newEnv) {
                             form.setValue('apiUrl', newEnv.url, { shouldValidate: true });
+                            form.setValue('firebaseTarget', newEnv.firebaseTarget, { shouldValidate: true });
                           }
                         }}
                         defaultValue={field.value}
@@ -410,7 +422,7 @@ export default function SyncManager() {
                   name="apiUrl"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>URL do GET de Consulta</FormLabel>
+                      <FormLabel className="flex items-center gap-2"><Link/> URL de Consulta (GET)</FormLabel>
                       <FormControl>
                         <Input
                           placeholder="https://api.example.com/data"
@@ -418,13 +430,29 @@ export default function SyncManager() {
                           readOnly
                         />
                       </FormControl>
-                      <FormDescription>
-                        Esta é a URL que será consultada.
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={form.control}
+                  name="firebaseTarget"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2"><Cloud/> Destino no Firebase</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="storage/pasta/"
+                          {...field}
+                          readOnly
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
