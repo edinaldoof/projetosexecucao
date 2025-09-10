@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useReducer, ReactNode, Dispatch, useEffect, useCallback } from "react";
+import { createContext, useContext, useReducer, ReactNode, Dispatch, useEffect } from "react";
 import { v4 as uuidv4 } from 'uuid';
 
 // Types
@@ -13,12 +13,22 @@ export type LogEntry = {
   timestamp: string;
 };
 
+export type FirebaseConfig = {
+    apiKey: string;
+    authDomain: string;
+    projectId: string;
+    storageBucket: string;
+    messagingSenderId: string;
+    appId: string;
+};
+
 export type Environment = {
   id: string;
   name: string;
   url: string;
-  firebaseTarget: string;
   syncInterval: number;
+  firebaseConfig: FirebaseConfig;
+  firebasePath: string; // Path within the storage bucket
 };
 
 export type SyncInstance = {
@@ -51,27 +61,37 @@ const initialState: State = {
   syncs: [],
 };
 
+// Default values are for example purposes only.
 const defaultEnvironments: Environment[] = [
   {
     id: '1',
     name: 'Produção DB (Exemplo)',
     url: 'https://jsonplaceholder.typicode.com/todos/1',
-    firebaseTarget: 'storage/producao/',
     syncInterval: 30000,
+    firebaseConfig: {
+      projectId: "prod-project-123",
+      appId: "1:prod:web:123",
+      storageBucket: "prod-project-123.appspot.com",
+      apiKey: "prod-key-123",
+      authDomain: "prod-project-123.firebaseapp.com",
+      messagingSenderId: "12345",
+    },
+    firebasePath: 'storage/producao/',
   },
   {
     id: '2',
     name: 'Desenvolvimento DB (Exemplo)',
     url: 'https://jsonplaceholder.typicode.com/posts/1',
-    firebaseTarget: 'storage/desenvolvimento/',
     syncInterval: 60000,
-  },
-  {
-    id: '3',
-    name: 'API de Teste (Falha)',
-    url: 'https://api.example.com/invalid-endpoint',
-    firebaseTarget: 'storage/testes_falha/',
-    syncInterval: 30000,
+     firebaseConfig: {
+      projectId: "dev-project-456",
+      appId: "1:dev:web:456",
+      storageBucket: "dev-project-456.appspot.com",
+      apiKey: "dev-key-456",
+      authDomain: "dev-project-456.firebaseapp.com",
+      messagingSenderId: "67890",
+    },
+    firebasePath: 'storage/desenvolvimento/',
   },
 ];
 
@@ -204,7 +224,6 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       const storedState = localStorage.getItem('syncAppState');
       if (storedState) {
         const parsedState = JSON.parse(storedState);
-        // Ensure logs are not excessively long
         parsedState.syncs.forEach((sync: SyncInstance) => {
           if (sync.logs.length > 50) {
             sync.logs = sync.logs.slice(0, 50);
@@ -212,7 +231,6 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         });
         dispatch({ type: 'INITIALIZE_STATE', payload: parsedState });
       } else {
-        // Initialize with default environments if nothing is in localStorage
          const initialSyncs: SyncInstance[] = defaultEnvironments.map(env => ({
             id: env.id,
             isPaused: true,
@@ -237,7 +255,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      localStorage.setItem('syncAppState', JSON.stringify(state));
+      if (state.environments.length > 0 || state.syncs.length > 0) {
+        localStorage.setItem('syncAppState', JSON.stringify(state));
+      }
     } catch (error) {
         console.error("Failed to save state to localStorage", error);
     }

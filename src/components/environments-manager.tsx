@@ -18,7 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useSync, Environment } from '@/contexts/sync-context';
-import { PlusCircle, Edit, Trash2, Link2, Database, Settings2 } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Settings2 } from 'lucide-react';
 import EnvironmentForm from './environment-form';
 import {
   AlertDialog,
@@ -70,7 +70,7 @@ export default function EnvironmentsManager() {
               <span>Gerenciador de Conexões</span>
             </CardTitle>
             <CardDescription>
-              Adicione, edite ou remova suas conexões de sincronização.
+              Adicione, edite ou remova suas conexões de sincronização. Cada conexão pode usar um projeto Firebase diferente.
             </CardDescription>
           </div>
           <Button onClick={handleAdd}>
@@ -82,9 +82,9 @@ export default function EnvironmentsManager() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>Origem (URL)</TableHead>
-                <TableHead>Destino (Firebase)</TableHead>
+                <TableHead>Nome da Conexão</TableHead>
+                <TableHead>Firebase Project ID</TableHead>
+                <TableHead>Storage Bucket</TableHead>
                 <TableHead>Intervalo (seg)</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -93,8 +93,8 @@ export default function EnvironmentsManager() {
               {state.environments.map((env) => (
                 <TableRow key={env.id}>
                   <TableCell className="font-medium">{env.name}</TableCell>
-                  <TableCell className="font-mono text-sm">{env.url}</TableCell>
-                  <TableCell className="font-mono text-sm">{env.firebaseTarget}</TableCell>
+                  <TableCell className="font-mono text-sm">{env.firebaseConfig.projectId}</TableCell>
+                  <TableCell className="font-mono text-sm">{env.firebaseConfig.storageBucket}</TableCell>
                   <TableCell>{env.syncInterval / 1000}</TableCell>
                   <TableCell className="text-right space-x-2">
                     <Button variant="outline" size="icon" onClick={() => handleEdit(env)}>

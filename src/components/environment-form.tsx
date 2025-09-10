@@ -23,12 +23,21 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Environment } from '@/contexts/sync-context';
+import { Separator } from './ui/separator';
 
 const formSchema = z.object({
   name: z.string().min(1, 'O nome é obrigatório.'),
   url: z.string().url('Por favor, insira uma URL válida.'),
-  firebaseTarget: z.string().min(1, 'O destino no Firebase é obrigatório.'),
   syncInterval: z.coerce.number().int().positive('O intervalo deve ser um número positivo de segundos.'),
+  firebasePath: z.string().min(1, 'O caminho de destino no Storage é obrigatório.'),
+  firebaseConfig: z.object({
+      apiKey: z.string().min(1, "API Key é obrigatória."),
+      authDomain: z.string().min(1, "Auth Domain é obrigatório."),
+      projectId: z.string().min(1, "Project ID é obrigatório."),
+      storageBucket: z.string().min(1, "Storage Bucket é obrigatório."),
+      messagingSenderId: z.string().min(1, "Messaging Sender ID é obrigatório."),
+      appId: z.string().min(1, "App ID é obrigatório."),
+  })
 });
 
 type EnvironmentFormValues = z.infer<typeof formSchema>;
@@ -51,8 +60,16 @@ export default function EnvironmentForm({
     defaultValues: {
       name: '',
       url: '',
-      firebaseTarget: '',
       syncInterval: 30,
+      firebasePath: 'storage/data/',
+      firebaseConfig: {
+        apiKey: '',
+        authDomain: '',
+        projectId: '',
+        storageBucket: '',
+        messagingSenderId: '',
+        appId: '',
+      }
     },
   });
 
@@ -61,15 +78,24 @@ export default function EnvironmentForm({
       form.reset({
         name: environment.name,
         url: environment.url,
-        firebaseTarget: environment.firebaseTarget,
-        syncInterval: environment.syncInterval / 1000, // Convert ms to seconds for display
+        syncInterval: environment.syncInterval / 1000,
+        firebasePath: environment.firebasePath,
+        firebaseConfig: environment.firebaseConfig,
       });
     } else {
       form.reset({
         name: '',
         url: '',
-        firebaseTarget: '',
         syncInterval: 30,
+        firebasePath: 'storage/data/',
+        firebaseConfig: {
+            apiKey: '',
+            authDomain: '',
+            projectId: '',
+            storageBucket: '',
+            messagingSenderId: '',
+            appId: '',
+        }
       });
     }
   }, [environment, form, isOpen]);
@@ -78,21 +104,22 @@ export default function EnvironmentForm({
     onSave({
       id: environment?.id || '', // ID will be generated in reducer for new envs
       ...data,
-      syncInterval: data.syncInterval * 1000, // Convert seconds to ms for storage
+      syncInterval: data.syncInterval * 1000, // Convert seconds to ms
     });
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{environment ? 'Editar Conexão' : 'Adicionar Nova Conexão'}</DialogTitle>
           <DialogDescription>
-            Preencha os detalhes da conexão de sincronização.
+            Preencha os detalhes da conexão de sincronização, incluindo as credenciais do projeto Firebase de destino.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
+            <h3 className="text-lg font-medium">Configuração da Origem</h3>
             <FormField
               control={form.control}
               name="name"
@@ -121,12 +148,28 @@ export default function EnvironmentForm({
             />
             <FormField
               control={form.control}
-              name="firebaseTarget"
+              name="syncInterval"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Destino no Firebase Storage (caminho)</FormLabel>
+                  <FormLabel>Intervalo de Sincronização (segundos)</FormLabel>
                   <FormControl>
-                    <Input placeholder="storage/producao/" {...field} />
+                    <Input type="number" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <Separator className="my-6" />
+            <h3 className="text-lg font-medium">Configuração do Firebase (Destino)</h3>
+             <FormField
+              control={form.control}
+              name="firebasePath"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Caminho no Storage</FormLabel>
+                  <FormControl>
+                    <Input placeholder="caminho/para/salvar/dados.json" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -134,12 +177,77 @@ export default function EnvironmentForm({
             />
             <FormField
               control={form.control}
-              name="syncInterval"
+              name="firebaseConfig.projectId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Intervalo de Sincronização (segundos)</FormLabel>
+                  <FormLabel>Project ID</FormLabel>
                   <FormControl>
-                    <Input type="number" {...field} />
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="firebaseConfig.appId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>App ID</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="firebaseConfig.storageBucket"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Storage Bucket</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="firebaseConfig.apiKey"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>API Key</FormLabel>
+                  <FormControl>
+                    <Input type="password" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+             <FormField
+              control={form.control}
+              name="firebaseConfig.authDomain"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Auth Domain</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+             <FormField
+              control={form.control}
+              name="firebaseConfig.messagingSenderId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Messaging Sender ID</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

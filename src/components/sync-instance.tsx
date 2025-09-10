@@ -12,8 +12,11 @@ import {
   Clock,
   ChevronDown,
   ChevronUp,
+  Database,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { getApp, getApps, initializeApp } from 'firebase/app';
+import { getStorage } from 'firebase/storage';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -69,6 +72,14 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
   const handleSync = useCallback(async () => {
     if (sync.isPaused) return;
 
+    // Use a unique app name for each initialization to avoid conflicts
+    const appName = `firebase-app-${env.id}`;
+    const app = getApps().find(app => app.name === appName) || initializeApp(env.firebaseConfig, appName);
+    const storage = getStorage(app);
+    // In a real scenario, you would use this 'storage' instance to upload data.
+    console.log(`Firebase Storage instance for ${env.name} (Project: ${env.firebaseConfig.projectId})`, storage);
+
+
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -89,6 +100,11 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       if (!response.ok) {
         throw new Error(`A resposta da rede não foi 'ok': ${response.statusText}`);
       }
+      
+      // Here you would typically get the data and upload to Firebase Storage
+      // const data = await response.json();
+      // const storageRef = ref(storage, env.firebasePath);
+      // await uploadString(storageRef, JSON.stringify(data), 'raw');
       
       for (let i = 50; i <= 100; i += 10) {
         if (signal.aborted) throw new DOMException('Sincronização abortada pelo usuário.', 'AbortError');
@@ -112,7 +128,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     } finally {
       abortControllerRef.current = null;
     }
-  }, [env.url, env.name, sync.id, sync.isPaused, toast, dispatch]);
+  }, [env, sync.id, sync.isPaused, toast, dispatch]);
 
   useEffect(() => {
     if (sync.isPaused) {
@@ -156,12 +172,18 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
             </div>
             <div className="flex-grow border-t border-dashed"></div>
             <div className="flex items-center gap-2">
-                <Cloud className="h-5 w-5" />
-              <span className="font-medium text-foreground">
-                {env.firebaseTarget}
+                <Database className="h-5 w-5" />
+              <span className="font-medium text-foreground truncate max-w-xs">
+                {env.firebaseConfig.projectId}
               </span>
             </div>
           </div>
+           <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+             <Cloud className="h-5 w-5" />
+             <span className="font-mono text-xs">
+                {env.firebaseConfig.storageBucket}/{env.firebasePath}
+             </span>
+            </div>
           <Progress value={sync.syncProgress} className="w-full" />
           <div className="flex justify-between text-sm text-gray-500">
             <span>
