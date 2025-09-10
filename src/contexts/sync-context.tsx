@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 export type SyncState = 'idle' | 'syncing' | 'success' | 'error';
 
 export type LogEntry = {
-  id: string; // Changed to string to accommodate UUID
+  id: string;
   message: string;
   status: 'success' | 'error' | 'info';
   timestamp: string;
@@ -36,7 +36,7 @@ export type Environment = {
   url: string;
   schedule: SyncSchedule;
   firebaseConfig: FirebaseConfig;
-  firebasePath: string; // Path within the storage bucket
+  firestoreCollection: string; // Path to the Firestore collection
 };
 
 export type SyncInstance = {
@@ -184,6 +184,7 @@ function syncReducer(state: State, action: Action): State {
         ...action.environment,
         firebaseConfig: action.environment.firebaseConfig || emptyFirebaseConfig,
         schedule: action.environment.schedule || { value: 30, unit: 'seconds', days: [] },
+        firestoreCollection: action.environment.firestoreCollection || 'sincronizacao-dados',
       };
       const newSyncInstance: SyncInstance = {
         id: newId,
@@ -244,23 +245,21 @@ const loadState = (): State => {
         
         const parsedState = JSON.parse(storedState);
 
-        // Basic validation to check if the loaded state is plausible
         if (!Array.isArray(parsedState.environments) || !Array.isArray(parsedState.syncs)) {
           throw new Error("Invalid state structure");
         }
 
-        // Data migration and validation
         parsedState.environments = parsedState.environments.map((env: any) => ({
             ...env,
             id: env.id || uuidv4(),
             name: env.name || 'Untitled Connection',
             url: env.url || '',
-            firebasePath: env.firebasePath || 'storage/data/',
+            firestoreCollection: env.firestoreCollection || env.firebasePath || 'sincronizacao-dados', // Migration
+            firebasePath: undefined, // remove old property
             firebaseConfig: env.firebaseConfig || emptyFirebaseConfig,
             schedule: env.schedule || { value: 30, unit: 'seconds', days: [] },
         }));
         
-        // Ensure syncs and environments are aligned
         const envIds = new Set(parsedState.environments.map((e: Environment) => e.id));
         parsedState.syncs = parsedState.syncs.filter((s: SyncInstance) => envIds.has(s.id));
         
@@ -309,8 +308,15 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      if (state !== initialState) { // Avoid saving the initial empty state
-        localStorage.setItem('syncAppState', JSON.stringify(state));
+      if (state !== initialState) {
+        const stateToSave = {
+            ...state,
+            environments: state.environments.map(e => {
+                const { firebasePath, ...rest } = e as any;
+                return rest;
+            })
+        };
+        localStorage.setItem('syncAppState', JSON.stringify(stateToSave));
       }
     } catch (error) {
         console.error("Failed to save state to localStorage", error);

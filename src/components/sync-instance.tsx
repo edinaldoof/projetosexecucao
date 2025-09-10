@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApp, getApps, initializeApp } from 'firebase/app';
-import { getStorage, ref, uploadString } from 'firebase/storage';
+import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import JSONPretty from 'react-json-pretty';
 
 import { Badge } from '@/components/ui/badge';
@@ -109,7 +109,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     
     const appName = `firebase-app-${env.id}`;
     const app = getApps().find(app => app.name === appName) || initializeApp(env.firebaseConfig, appName);
-    const storage = getStorage(app);
+    const db = getFirestore(app);
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -131,19 +131,35 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       }
       
       const data = await response.json();
-      setLastFetchedData(data); // Store the JSON object itself
-      dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'success', message: 'Dados JSON recebidos e processados com sucesso.' } });
-      dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 50 });
+      setLastFetchedData(data);
+      dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'success', message: 'Dados JSON recebidos com sucesso.' } });
+      
+      if (!Array.isArray(data)) {
+        throw new Error("Os dados recebidos da API não são um array. A sincronização com o Firestore requer um array de objetos.");
+      }
+      
+      dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'info', message: `Iniciando sincronização de ${data.length} registros para a coleção '${env.firestoreCollection}'...` } });
 
-      const storagePath = `${env.firebasePath}${new Date().toISOString()}.json`;
-      const storageRef = ref(storage, storagePath);
-      const dataString = JSON.stringify(data, null, 2);
-      dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'info', message: `Iniciando upload para o Firebase em: ${storagePath}` } });
-      await uploadString(storageRef, dataString, 'raw');
-      
-      dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 100 });
-      
+      const totalItems = data.length;
+      for (const [index, item] of data.entries()) {
+        if (typeof item !== 'object' || item === null) {
+          dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'error', message: `Item inválido encontrado no índice ${index}. Ignorando.` } });
+          continue;
+        }
+
+        // Use item.id if it exists, otherwise Firestore will generate one.
+        const docId = item.id ? String(item.id) : undefined;
+        const docRef = docId ? doc(db, env.firestoreCollection, docId) : doc(db, env.firestoreCollection);
+        
+        await setDoc(docRef, item, { merge: true }); // Using { merge: true } to update existing docs or create new ones.
+
+        const progress = 50 + Math.round(((index + 1) / totalItems) * 50);
+        dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress });
+      }
+
+      dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'success', message: `Sincronização de ${totalItems} registros com o Firestore concluída.` } });
       dispatch({ type: 'SYNC_SUCCESS', id: sync.id });
+
     } catch (error: any) {
       if (error.name === 'AbortError') {
         dispatch({ type: 'SYNC_ERROR', id: sync.id, error: 'Sincronização abortada pelo usuário.' });
@@ -231,7 +247,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                 <Cloud className="h-5 w-5" />
                 <span className="font-mono text-xs">
-                    {env.firebaseConfig.storageBucket}/{env.firebasePath}
+                    Coleção: {env.firestoreCollection}
                 </span>
             </div>
 

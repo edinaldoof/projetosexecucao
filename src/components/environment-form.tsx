@@ -28,7 +28,7 @@ import { Separator } from './ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Checkbox } from './ui/checkbox';
 import { getApp, initializeApp, deleteApp } from 'firebase/app';
-import { getStorage, ref, getMetadata } from 'firebase/storage';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { CheckCircle, Loader2, XCircle } from 'lucide-react';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction } from './ui/alert-dialog';
 
@@ -50,7 +50,7 @@ const formSchema = z.object({
     unit: z.enum(['seconds', 'minutes', 'hours']),
     days: z.array(z.enum(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'])).default([]),
   }),
-  firebasePath: z.string().min(1, 'O caminho de destino no Storage é obrigatório.'),
+  firestoreCollection: z.string().min(1, 'O nome da coleção no Firestore é obrigatório.'),
   firebaseConfig: z.object({
       apiKey: z.string().min(1, "API Key é obrigatória."),
       authDomain: z.string().min(1, "Auth Domain é obrigatório."),
@@ -98,7 +98,7 @@ export default function EnvironmentForm({
       name: '',
       url: '',
       schedule: defaultSchedule,
-      firebasePath: 'storage/data/',
+      firestoreCollection: 'sincronizacao-dados',
       firebaseConfig: {
         apiKey: '',
         authDomain: '',
@@ -117,7 +117,7 @@ export default function EnvironmentForm({
           name: environment.name,
           url: environment.url,
           schedule: environment.schedule,
-          firebasePath: environment.firebasePath,
+          firestoreCollection: environment.firestoreCollection,
           firebaseConfig: environment.firebaseConfig,
         });
       } else {
@@ -125,7 +125,7 @@ export default function EnvironmentForm({
           name: '',
           url: '',
           schedule: defaultSchedule,
-          firebasePath: 'storage/data/',
+          firestoreCollection: 'sincronizacao-dados',
           firebaseConfig: {
               apiKey: '',
               authDomain: '',
@@ -165,18 +165,13 @@ export default function EnvironmentForm({
         throw new Error('Configuração do Firebase (Project ID) está incompleta.');
       }
       testApp = initializeApp(data.firebaseConfig, appName);
-      const storage = getStorage(testApp);
-      // We test by trying to get the metadata of the storage path. This requires a valid connection.
-      const storageRef = ref(storage, data.firebasePath);
-      await getMetadata(storageRef);
-      setFirebaseTest({ status: 'success', message: 'Conexão com o Firebase Storage estabelecida com sucesso.' });
+      const db = getFirestore(testApp);
+      // We test by trying to get a non-existent document. This requires a valid authenticated connection.
+      const docRef = doc(db, data.firestoreCollection, 'connection-test');
+      await getDoc(docRef);
+      setFirebaseTest({ status: 'success', message: 'Conexão com o Firestore estabelecida com sucesso.' });
     } catch (error: any) {
-        if (error.code === 'storage/object-not-found') {
-            // This is actually a success for connection testing, it means we connected and authenticated, but the folder/path doesn't exist yet.
-            setFirebaseTest({ status: 'success', message: 'Conexão com o Firebase Storage estabelecida. O caminho especificado ainda não existe, mas será criado na primeira sincronização.' });
-        } else {
-            setFirebaseTest({ status: 'error', message: `Falha na conexão com o Firebase: ${error.message}` });
-        }
+      setFirebaseTest({ status: 'error', message: `Falha na conexão com o Firestore: ${error.message}` });
     } finally {
         if (testApp) {
             await deleteApp(testApp);
@@ -412,15 +407,15 @@ export default function EnvironmentForm({
               />
               <FormField
                 control={form.control}
-                name="firebasePath"
+                name="firestoreCollection"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Caminho no Storage</FormLabel>
+                    <FormLabel>Nome da Coleção Principal</FormLabel>
                     <FormControl>
-                      <Input placeholder="ex: backups/clientes/" {...field} />
+                      <Input placeholder="ex: usuarios" {...field} />
                     </FormControl>
                     <FormDescription>
-                      Define a pasta onde os arquivos JSON sincronizados serão salvos. Ex: 'dados/producao/'.
+                      Define a coleção no Firestore onde os dados serão salvos.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -461,5 +456,3 @@ export default function EnvironmentForm({
     </>
   );
 }
-
-    
