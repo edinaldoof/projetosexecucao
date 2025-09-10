@@ -315,45 +315,6 @@ export default function EnvironmentForm({
             />
             <FormField
               control={form.control}
-              name="firebaseConfig.projectId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Project ID</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="firebaseConfig.appId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>App ID</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="firebaseConfig.storageBucket"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Storage Bucket</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
               name="firebaseConfig.apiKey"
               render={({ field }) => (
                 <FormItem>
@@ -378,12 +339,51 @@ export default function EnvironmentForm({
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="firebaseConfig.projectId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Project ID</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="firebaseConfig.storageBucket"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Storage Bucket</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
              <FormField
               control={form.control}
               name="firebaseConfig.messagingSenderId"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Messaging Sender ID</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="firebaseConfig.appId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>App ID</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
