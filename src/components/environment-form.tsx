@@ -142,8 +142,7 @@ export default function EnvironmentForm({
     setIsTestResultOpen(true);
 
     const data = form.getValues();
-    const appName = `firebase-test-${Date.now()}`;
-
+    
     // 1. Test Source URL
     try {
       const sourceResponse = await fetch(data.url, { method: 'HEAD' });
@@ -160,6 +159,7 @@ export default function EnvironmentForm({
 
     // 2. Test Firebase Connection
     setFirebaseTest({ status: 'testing', message: 'Iniciando teste de conexão com o Firebase...' });
+    const appName = `firebase-test-${Date.now()}`;
     let testApp;
     try {
       if (!data.firebaseConfig || !data.firebaseConfig.projectId) {
@@ -168,26 +168,38 @@ export default function EnvironmentForm({
       testApp = initializeApp(data.firebaseConfig, appName);
       const db = getFirestore(testApp);
 
-      // Try to get a non-existent document. This tests permissions and connectivity.
-      // We race it against a timeout to prevent the app from hanging.
+      // This is a more direct way to test connectivity. We try to read a document
+      // that does not exist. We expect a 'permission-denied' or for it to complete
+      // successfully if rules are open. A timeout here is a strong indicator of a
+      // network/API key restriction issue.
+      const testDocRef = doc(db, `__connection-test__/${Date.now()}`);
+
       await Promise.race([
-        getDoc(doc(db, data.firestoreCollection, 'connection-test')),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout: A conexão demorou muito para ser estabelecida.")), 10000))
+        getDoc(testDocRef),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Timeout: A conexão demorou muito para ser estabelecida.")), 10000)
+        )
       ]);
 
+      // If we reach here, it means we connected to the Firestore backend, even if we
+      // don't have permission to read (which is fine for a connection test).
       setFirebaseTest({ status: 'success', message: 'Conexão com o Firestore estabelecida com sucesso.' });
+
     } catch (error: any) {
         let errorMessage = `Falha na conexão com o Firestore: ${error.message}.`;
-        if (error.message.includes('client is offline') || error.message.includes('Timeout')) {
+        if (error.code === 'permission-denied') {
+            // This is actually a "good" error for a connection test. It means we connected, but rules stopped us.
+            setFirebaseTest({ status: 'success', message: 'Conexão estabelecida, mas as Regras de Segurança negaram a leitura (isso é normal para um teste se as regras não forem públicas).' });
+        } else if (error.message.includes('client is offline') || error.message.includes('Timeout')) {
             errorMessage += "\n\nPossíveis causas:\n" +
                             "1. Verifique se as credenciais (apiKey, projectId, etc.) estão corretas.\n" +
                             "2. Confirme se você já criou um banco de dados Firestore no seu projeto Firebase.\n" +
                             "3. Verifique se as restrições da sua API Key no Google Cloud permitem o uso a partir deste domínio/localhost.\n" +
                             "4. Verifique as Regras de Segurança do seu Firestore.";
-        } else if (error.message.includes('permission-denied')) {
-            errorMessage += "\n\nAcesso negado pelas Regras de Segurança do Firestore. Verifique se suas regras permitem a operação de leitura.";
+            setFirebaseTest({ status: 'error', message: errorMessage });
+        } else {
+             setFirebaseTest({ status: 'error', message: errorMessage });
         }
-      setFirebaseTest({ status: 'error', message: errorMessage });
     } finally {
         if (testApp) {
             // Cleanup the temporary firebase app instance
