@@ -1,17 +1,20 @@
 
 from flask import Flask, jsonify
-from flask_cors import CORS  # Importa a biblioteca CORS
+from flask_cors import CORS
 from queries import fetch_table_data
 from flask import request
 
 # Inicializa o aplicativo Flask
 app = Flask(__name__)
 
-# Habilita o CORS de forma mais explícita para garantir a comunicação
-# com o painel. Isso permite a origem específica, os métodos GET e HEAD,
-# e os cabeçalhos comuns.
+# Habilita o CORS para permitir a comunicação com o painel de desenvolvimento e produção.
 CORS(app, resources={r"/api/*": {
-    "origins": "http://192.168.3.31:777",
+    "origins": [
+        "http://192.168.3.31:777", # Origem de Desenvolvimento
+        "http://192.168.3.31:3000", # Origem de Produção
+        "http://localhost:777",      # Localhost para Desenvolvimento
+        "http://localhost:3000"       # Localhost para Produção
+    ],
     "methods": ["GET", "HEAD"],
     "allow_headers": ["Content-Type"]
 }})
@@ -28,8 +31,6 @@ def get_dados():
     Endpoint para buscar os dados da tabela Convenio.
     Retorna os dados em formato JSON ou um erro 500 em caso de falha.
     """
-    # Se a requisição for do tipo HEAD (do teste de conexão),
-    # retorna uma resposta de sucesso vazia imediatamente.
     if request.method == 'HEAD':
         return '', 200
 
@@ -42,3 +43,4 @@ def get_dados():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=True)
+
