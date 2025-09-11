@@ -80,7 +80,7 @@ const defaultFirebaseConfig = {
     apiKey: "AIzaSyAs0dEb3I8EM-GCiNODnPNtCS-42w_Ypng",
     authDomain: "projetos-execucao.firebaseapp.com",
     projectId: "projetos-execucao",
-    storageBucket: "projetos-execucao.appspot.com",
+    storageBucket: "projetos-execucao.firebasestorage.app",
     messagingSenderId: "135382364857",
     appId: "1:135382364857:web:4a0060b108e40aacbda168",
 };
@@ -172,7 +172,7 @@ export default function EnvironmentForm({
       }
       testApp = initializeApp(data.firebaseConfig, appName);
       const db = getFirestore(testApp);
-      const testDocRef = doc(db, `__connection-test__/${Date.now()}`);
+      const testDocRef = doc(db, `fadex-connection-test/${Date.now()}`);
 
       await Promise.race([
         getDoc(testDocRef),
@@ -187,7 +187,8 @@ export default function EnvironmentForm({
         console.error("Erro no teste de conexão do Firebase:", error);
         let errorMessage = `Falha na conexão com o Firestore: ${error.message}.`;
         
-        if (error.code === 'permission-denied') {
+        // This is the expected behavior for a non-public database. It means we connected, but were denied access, which is a success for connection testing.
+        if (error.code === 'permission-denied' || (error.message && error.message.includes('permission-denied'))) {
             setFirebaseTest({ status: 'success', message: 'Conexão estabelecida, mas as Regras de Segurança negaram a leitura (isso é esperado se as regras não forem públicas e confirma que a conectividade funciona).' });
         } else {
              if (error.message.includes('Timeout')) {
