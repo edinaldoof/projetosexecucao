@@ -77,7 +77,7 @@ const defaultSchedule: SyncSchedule = {
 };
 
 type TestResult = {
-  status: 'success' | 'error' | 'idle';
+  status: 'success' | 'error' | 'idle' | 'testing';
   message: string;
 };
 
@@ -141,11 +141,10 @@ export default function EnvironmentForm({
 
   const handleTestConnection = async () => {
     setIsTesting(true);
-    setSourceTest({ status: 'idle', message: '' });
-    setFirebaseTest({ status: 'idle', message: '' });
-
-    // Give UI time to update to show the loader
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // Reset and open the results dialog immediately
+    setSourceTest({ status: 'testing', message: 'Iniciando teste de conexão com a API...' });
+    setFirebaseTest({ status: 'idle', message: 'Aguardando teste da API de origem.' });
+    setIsTestResultOpen(true);
 
     const data = form.getValues();
     const appName = `firebase-test-${Date.now()}`;
@@ -159,9 +158,13 @@ export default function EnvironmentForm({
       setSourceTest({ status: 'success', message: 'Conexão com a API de origem estabelecida com sucesso.' });
     } catch (error: any) {
       setSourceTest({ status: 'error', message: `Falha ao conectar com a API de origem: ${error.message}` });
+      setFirebaseTest({ status: 'idle', message: 'Teste do Firebase cancelado devido à falha anterior.' });
+      setIsTesting(false);
+      return; // Stop here if source fails
     }
 
     // 2. Test Firebase Connection
+    setFirebaseTest({ status: 'testing', message: 'Iniciando teste de conexão com o Firebase...' });
     let testApp;
     try {
       if (!data.firebaseConfig || !data.firebaseConfig.projectId) {
@@ -170,11 +173,9 @@ export default function EnvironmentForm({
       testApp = initializeApp(data.firebaseConfig, appName);
       const db = getFirestore(testApp);
 
-      // Tenta uma operação de leitura com um timeout. A mensagem "client is offline"
-      // geralmente significa que a conexão inicial falhou.
       await Promise.race([
         getDoc(doc(db, data.firestoreCollection, 'connection-test')),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout: A conexão demorou muito para ser estabelecida.")), 5000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout: A conexão demorou muito para ser estabelecida.")), 10000))
       ]);
 
       setFirebaseTest({ status: 'success', message: 'Conexão com o Firestore estabelecida com sucesso.' });
@@ -195,7 +196,6 @@ export default function EnvironmentForm({
             await deleteApp(testApp);
         }
         setIsTesting(false);
-        setIsTestResultOpen(true);
     }
   };
 
@@ -210,7 +210,7 @@ export default function EnvironmentForm({
     <div className="flex items-start gap-4 p-3 border rounded-lg bg-secondary/30">
       {result.status === 'success' && <CheckCircle className="h-6 w-6 text-green-500 flex-shrink-0 mt-1" />}
       {result.status === 'error' && <XCircle className="h-6 w-6 text-red-500 flex-shrink-0 mt-1" />}
-      {result.status === 'idle' && <Loader2 className="h-6 w-6 text-blue-500 flex-shrink-0 mt-1 animate-spin" />}
+      {(result.status === 'testing' || result.status === 'idle') && <Loader2 className="h-6 w-6 text-blue-500 flex-shrink-0 mt-1 animate-spin" />}
       <div>
         <p className="font-semibold">{title}</p>
         <p className="text-sm text-muted-foreground whitespace-pre-wrap">{result.message}</p>
@@ -470,7 +470,7 @@ export default function EnvironmentForm({
                 <TestResultItem title="Destino Firebase" result={firebaseTest} />
             </div>
             <AlertDialogFooter>
-                <AlertDialogAction onClick={() => setIsTestResultOpen(false)}>Fechar</AlertDialogAction>
+                <AlertDialogAction onClick={() => setIsTestResultOpen(false)} disabled={isTesting}>Fechar</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
