@@ -38,10 +38,13 @@ import { useSync, SyncInstance as SyncInstanceType, Environment } from '@/contex
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { ScrollArea } from './ui/scroll-area';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 
 type SyncState = 'idle' | 'syncing' | 'success' | 'error';
 
 const dayMap: { [key: string]: number } = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+
+const PREVIEW_ITEM_LIMIT = 20;
 
 const StatusIcon = ({ status }: { status: SyncState }) => {
   switch (status) {
@@ -78,6 +81,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isLogsOpen, setIsLogsOpen] = useState(false);
   const [lastFetchedData, setLastFetchedData] = useState<any | null>(null);
+  const [previewData, setPreviewData] = useState<any | null>(null);
   const lastRunRef = useRef<number | null>(null);
 
   const handleDownloadJson = () => {
@@ -134,7 +138,16 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       }
       
       const data = await response.json();
+      // Store full data for download
       setLastFetchedData(data);
+      
+      // Create and store truncated data for preview
+      if (Array.isArray(data) && data.length > PREVIEW_ITEM_LIMIT) {
+        setPreviewData(data.slice(0, PREVIEW_ITEM_LIMIT));
+      } else {
+        setPreviewData(data);
+      }
+
       dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'success', message: 'Dados JSON recebidos com sucesso.' } });
       
       if (!Array.isArray(data)) {
@@ -199,6 +212,8 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     const timer = setInterval(checkAndRun, 1000);
     return () => clearInterval(timer);
   }, [sync.isPaused, env.schedule, handleSync]);
+
+  const isPreviewTruncated = Array.isArray(lastFetchedData) && lastFetchedData.length > PREVIEW_ITEM_LIMIT;
 
   return (
     <Card className="shadow-lg w-full">
@@ -284,13 +299,24 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
                             Estes são os dados obtidos da URL de origem na última sincronização bem-sucedida.
                         </DialogDescription>
                     </DialogHeader>
+
+                    {isPreviewTruncated && (
+                      <Alert>
+                        <Info className="h-4 w-4" />
+                        <AlertTitle>Visualização Parcial</AlertTitle>
+                        <AlertDescription>
+                          Apenas os primeiros {PREVIEW_ITEM_LIMIT} de {lastFetchedData.length} registros estão sendo exibidos para evitar travamentos. O arquivo de download contém todos os dados.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
                     <ScrollArea className="flex-grow border rounded-md p-1 bg-secondary/50">
-                       <JSONPretty data={lastFetchedData} mainStyle="padding:1em" valueStyle="font-size:1.1em" />
+                       <JSONPretty data={previewData} mainStyle="padding:1em" valueStyle="font-size:1.1em" />
                     </ScrollArea>
                     <DialogFooter>
                         <Button onClick={handleDownloadJson}>
                             <Download />
-                            Baixar JSON
+                            Baixar JSON Completo
                         </Button>
                     </DialogFooter>
                 </DialogContent>
