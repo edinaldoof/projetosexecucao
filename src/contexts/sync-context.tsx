@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useReducer, ReactNode, Dispatch, useEffect, useCallback } from "react";
+import { createContext, useContext, useReducer, ReactNode, Dispatch, useEffect } from "react";
 import { v4 as uuidv4 } from 'uuid';
 
 // Types
@@ -91,7 +91,7 @@ function syncReducer(state: State, action: Action): State {
       return {
         ...state,
         syncs: state.syncs.map(sync =>
-          sync.id === action.id ? { ...sync, isPaused: !sync.isPaused, syncState: 'idle' } : sync
+          sync.id === action.id ? { ...sync, isPaused: !sync.isPaused, syncState: sync.syncState === 'syncing' ? 'idle' : sync.syncState } : sync
         ),
       };
 
@@ -99,7 +99,7 @@ function syncReducer(state: State, action: Action): State {
       return {
         ...state,
         syncs: state.syncs.map(sync =>
-          sync.id === action.id ? { ...sync, syncState: 'syncing', syncProgress: 0, logs: [] } : sync
+          sync.id === action.id ? { ...sync, syncState: 'syncing', syncProgress: 0, logs: sync.logs.length > 20 ? [] : sync.logs } : sync
         ),
       };
 
@@ -127,13 +127,13 @@ function syncReducer(state: State, action: Action): State {
                 ...sync,
                 syncState: 'error',
                 logs: [
-                  ...sync.logs,
                   {
                     id: uuidv4(),
                     message: `Falha na sincronização: ${action.error}`,
                     status: 'error',
                     timestamp: new Date().toLocaleTimeString(),
                   },
+                  ...sync.logs
                 ],
               }
             : sync
@@ -294,3 +294,5 @@ export function useSync() {
   }
   return context;
 }
+
+    

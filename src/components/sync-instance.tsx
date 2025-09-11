@@ -17,7 +17,7 @@ import {
   Info,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getApp, getApps, initializeApp, deleteApp } from 'firebase/app';
+import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import JSONPretty from 'react-json-pretty';
 import { v4 as uuidv4 } from 'uuid';
@@ -33,7 +33,6 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { useToast } from '@/hooks/use-toast';
 import { useSync, SyncInstance as SyncInstanceType, Environment } from '@/contexts/sync-context';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
@@ -75,14 +74,32 @@ type SyncInstanceProps = {
   env: Environment;
 };
 
+function formatCountdown(milliseconds: number): string {
+    if (milliseconds < 0) return "0s";
+    
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    let result = '';
+    if (days > 0) result += `${days}d `;
+    if (hours > 0 || days > 0) result += `${hours}h `;
+    if (minutes > 0 || hours > 0 || days > 0) result += `${minutes}m `;
+    result += `${seconds}s`;
+
+    return result.trim();
+}
+
 export default function SyncInstance({ sync, env }: SyncInstanceProps) {
   const { dispatch } = useSync();
-  const { toast } = useToast();
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isLogsOpen, setIsLogsOpen] = useState(false);
   const [lastFetchedData, setLastFetchedData] = useState<any | null>(null);
   const [previewData, setPreviewData] = useState<any | null>(null);
-  const lastRunRef = useRef<number | null>(null);
+  const lastRunRef = useRef<number | null>(sync.lastSync ? new Date(sync.lastSync).getTime() : null);
+  const [countdown, setCountdown] = useState('');
 
   const handleDownloadJson = () => {
     if (!lastFetchedData) return;
@@ -97,10 +114,23 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+  
+  const handleTogglePause = () => {
+    const isCurrentlyPaused = sync.isPaused;
+    dispatch({ type: 'TOGGLE_PAUSE', id: sync.id });
+    if (!isCurrentlyPaused) { // If it was running and is now being paused
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'info', message: 'Sincronização pausada pelo usuário.' } });
+    } else { // If it was paused and is now being resumed
+       dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'info', message: 'Sincronização retomada. Aguardando próximo agendamento.' } });
+    }
+  };
 
   const handleSync = useCallback(async (isManual: boolean = false) => {
     if (sync.isPaused && !isManual) return;
-    if (sync.syncState === 'syncing') return; // Prevent multiple concurrent syncs
+    if (sync.syncState === 'syncing') return;
 
     if (!env.firebaseConfig?.projectId || !env.url) {
       const errorMessage = "Configuração do Firebase ou URL de origem ausente. Verifique as configurações da conexão.";
@@ -108,8 +138,6 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       return;
     }
     
-    // Each sync instance gets its own uniquely named Firebase app instance.
-    // This is critical for ensuring connections don't get mixed up.
     const appName = `firebase-app-${env.id}`;
     let app;
     if (!getApps().some(app => app.name === appName)) {
@@ -120,7 +148,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     const db = getFirestore(app);
 
     if (abortControllerRef.current) {
-      abortControllerRef.current.abort(); // Abort previous controller if any
+      abortControllerRef.current.abort();
     }
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
@@ -133,7 +161,9 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 10 });
       
       const response = await fetch(env.url, { signal });
-      if (signal.aborted) throw new Error('Sincronização abortada.');
+      if (signal.aborted) {
+          throw new Error('Sincronização abortada.');
+      }
       dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 25 });
 
       if (!response.ok) {
@@ -141,12 +171,12 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       }
       
       const data = await response.json();
-      if (signal.aborted) throw new Error('Sincronização abortada.');
+      if (signal.aborted) {
+          throw new Error('Sincronização abortada.');
+      }
 
-      // Store full data for download
       setLastFetchedData(data);
       
-      // Create and store truncated data for preview
       if (Array.isArray(data) && data.length > PREVIEW_ITEM_LIMIT) {
         setPreviewData(data.slice(0, PREVIEW_ITEM_LIMIT));
       } else {
@@ -163,7 +193,9 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'info', message: `Sincronizando ${totalItems} registros para a coleção '${env.firestoreCollection}'...` } });
 
       for (const [index, item] of data.entries()) {
-         if (signal.aborted) throw new Error('Sincronização abortada.');
+         if (signal.aborted) {
+             throw new Error('Sincronização abortada.');
+         }
         if (typeof item !== 'object' || item === null) {
           dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'error', message: `Item inválido encontrado no índice ${index}. Ignorando.` } });
           continue;
@@ -183,7 +215,10 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
 
     } catch (error: any) {
        const errorMessage = error.name === 'AbortError' ? 'Sincronização abortada pelo usuário.' : error.message;
-       dispatch({ type: 'SYNC_ERROR', id: sync.id, error: errorMessage });
+       // Only dispatch an error if it wasn't a user-initiated pause
+       if (!sync.isPaused) {
+           dispatch({ type: 'SYNC_ERROR', id: sync.id, error: errorMessage });
+       }
     } finally {
       abortControllerRef.current = null;
     }
@@ -193,17 +228,15 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     if (sync.isPaused) {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
-        // The finally block in handleSync will set it to null.
       }
-      return; // Stop any new timers from being set
+      return;
     }
 
     const { value, unit, days } = env.schedule;
     const intervalInMs = value * (unit === 'seconds' ? 1000 : unit === 'minutes' ? 60000 : 3600000);
 
     const checkAndRun = () => {
-      // Re-check isPaused inside the timer to catch state changes.
-      if (sync.isPaused) return;
+      if (sync.isPaused || sync.syncState === 'syncing') return;
 
       const now = new Date();
       const scheduledDays = days.length > 0 ? days.map(d => dayMap[d]) : [0,1,2,3,4,5,6];
@@ -214,25 +247,50 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       
       const lastRun = lastRunRef.current ?? (Date.now() - intervalInMs);
       if (Date.now() - lastRun >= intervalInMs) {
-        handleSync(false); // Pass isManual as false
+        handleSync(false);
       }
     };
-
-    // Initial check on resume
-    checkAndRun();
+    
+    checkAndRun(); // Initial check
 
     const timer = setInterval(checkAndRun, 1000);
     
-    // Cleanup function
-    return () => {
-      clearInterval(timer);
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+    return () => clearInterval(timer);
+  }, [sync.isPaused, sync.syncState, env.schedule, handleSync]);
+
+  // Countdown timer effect
+  useEffect(() => {
+    const { value, unit } = env.schedule;
+    const intervalInMs = value * (unit === 'seconds' ? 1000 : unit === 'minutes' ? 60000 : 3600000);
+
+    const countdownTimer = setInterval(() => {
+      if (sync.isPaused || sync.syncState === 'syncing' || !lastRunRef.current) {
+        setCountdown('');
+        return;
       }
-    };
-  }, [sync.isPaused, env.schedule, handleSync]);
+      
+      const nextRunTime = lastRunRef.current + intervalInMs;
+      const remainingTime = nextRunTime - Date.now();
+
+      if (remainingTime > 0) {
+        setCountdown(formatCountdown(remainingTime));
+      } else {
+        setCountdown('');
+      }
+    }, 1000);
+
+    return () => clearInterval(countdownTimer);
+  }, [sync.isPaused, sync.syncState, env.schedule]);
+
 
   const isPreviewTruncated = Array.isArray(lastFetchedData) && lastFetchedData.length > PREVIEW_ITEM_LIMIT;
+
+  const getStatusText = () => {
+    if (sync.syncState === 'syncing') return 'Sincronizando...';
+    if (sync.isPaused) return 'Pausado';
+    if (countdown) return `Próxima em: ${countdown}`;
+    return 'Aguardando agendamento';
+  };
 
   return (
     <Card className="shadow-lg w-full">
@@ -282,20 +340,14 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
 
           <Progress value={sync.syncProgress} className="w-full" />
           <div className="flex justify-between text-sm text-gray-500">
-            <span>
-              {sync.syncState === 'syncing'
-                ? 'Sincronizando...'
-                : sync.isPaused 
-                ? 'Pausado'
-                : 'Aguardando agendamento'}
-            </span>
+            <span>{getStatusText()}</span>
             <span>{sync.syncProgress}%</span>
           </div>
         </div>
       </CardContent>
       <CardFooter className="flex flex-col items-start gap-4">
         <div className="grid grid-cols-3 gap-2 w-full">
-            <Button onClick={() => dispatch({ type: 'TOGGLE_PAUSE', id: sync.id })} className="w-full">
+            <Button onClick={handleTogglePause} className="w-full">
               {sync.isPaused ? (
                 <PlayCircle />
               ) : (
@@ -387,3 +439,5 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     </Card>
   );
 }
+
+    
