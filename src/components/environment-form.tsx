@@ -347,6 +347,22 @@ export default function EnvironmentForm({
                 <h3 className="text-lg font-medium">Configuração do Firebase (Destino)</h3>
                 <FormField
                   control={form.control}
+                  name="firestoreCollection"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nome da Coleção Principal</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex: convenios" {...field} />
+                      </FormControl>
+                      <FormDescription>
+                        Define a coleção no Firestore onde os dados serão salvos.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
                   name="firebaseConfig.apiKey"
                   render={({ field }) => (
                     <FormItem>
@@ -419,22 +435,6 @@ export default function EnvironmentForm({
                       <FormControl>
                         <Input {...field} />
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="firestoreCollection"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nome da Coleção Principal</FormLabel>
-                      <FormControl>
-                        <Input placeholder="ex: usuarios" {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        Define a coleção no Firestore onde os dados serão salvos.
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
