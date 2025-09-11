@@ -173,6 +173,8 @@ export default function EnvironmentForm({
       testApp = initializeApp(data.firebaseConfig, appName);
       const db = getFirestore(testApp);
 
+      // Try to get a non-existent document. This tests permissions and connectivity.
+      // We race it against a timeout to prevent the app from hanging.
       await Promise.race([
         getDoc(doc(db, data.firestoreCollection, 'connection-test')),
         new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout: A conexão demorou muito para ser estabelecida.")), 10000))
@@ -193,6 +195,7 @@ export default function EnvironmentForm({
       setFirebaseTest({ status: 'error', message: errorMessage });
     } finally {
         if (testApp) {
+            // Cleanup the temporary firebase app instance
             await deleteApp(testApp);
         }
         setIsTesting(false);
