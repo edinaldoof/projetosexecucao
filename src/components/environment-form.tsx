@@ -76,6 +76,15 @@ const defaultSchedule: SyncSchedule = {
   days: [],
 };
 
+const defaultFirebaseConfig = {
+    apiKey: "AIzaSyAs0dEb3I8EM-GCiNODnPNtCS-42w_Ypng",
+    authDomain: "projetos-execucao.firebaseapp.com",
+    projectId: "projetos-execucao",
+    storageBucket: "projetos-execucao.appspot.com",
+    messagingSenderId: "135382364857",
+    appId: "1:135382364857:web:4a0060b108e40aacbda168",
+};
+
 type TestResult = {
   status: 'success' | 'error' | 'idle' | 'testing';
   message: string;
@@ -99,14 +108,7 @@ export default function EnvironmentForm({
       url: '',
       schedule: defaultSchedule,
       firestoreCollection: 'sincronizacao-dados',
-      firebaseConfig: {
-        apiKey: '',
-        authDomain: '',
-        projectId: '',
-        storageBucket: '',
-        messagingSenderId: '',
-        appId: '',
-      }
+      firebaseConfig: defaultFirebaseConfig,
     },
   });
 
@@ -126,14 +128,7 @@ export default function EnvironmentForm({
           url: '',
           schedule: defaultSchedule,
           firestoreCollection: 'sincronizacao-dados',
-          firebaseConfig: {
-              apiKey: '',
-              authDomain: '',
-              projectId: '',
-              storageBucket: '',
-              messagingSenderId: '',
-              appId: '',
-          }
+          firebaseConfig: defaultFirebaseConfig,
         });
       }
     }
