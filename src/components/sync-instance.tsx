@@ -216,7 +216,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     } catch (error: any) {
        const errorMessage = error.name === 'AbortError' ? 'Sincronização abortada pelo usuário.' : error.message;
        // Only dispatch an error if it wasn't a user-initiated pause
-       if (!sync.isPaused) {
+       if (!sync.isPaused || isManual) {
            dispatch({ type: 'SYNC_ERROR', id: sync.id, error: errorMessage });
        }
     } finally {
@@ -339,8 +339,11 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
             </div>
 
           <Progress value={sync.syncProgress} className="w-full" />
-          <div className="flex justify-between text-sm text-gray-500">
-            <span>{getStatusText()}</span>
+          <div className="flex justify-between text-sm text-muted-foreground">
+            <div className="flex items-center gap-1.5">
+              <Clock className="h-4 w-4" />
+              <span>{getStatusText()}</span>
+            </div>
             <span>{sync.syncProgress}%</span>
           </div>
         </div>
@@ -439,5 +442,3 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     </Card>
   );
 }
-
-    

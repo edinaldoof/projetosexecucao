@@ -294,5 +294,3 @@ export function useSync() {
   }
   return context;
 }
-
-    
