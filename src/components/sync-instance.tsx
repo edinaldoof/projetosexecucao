@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApp, getApps, initializeApp, deleteApp } from 'firebase/app';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import JSONPretty from 'react-json-pretty';
+import { v4 as uuidv4 } from 'uuid';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -320,7 +321,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
                         Nenhum log para exibir.
                         </p>
                     ) : (
-                        sync.logs.map(log => (
+                        sync.logs.map((log) => (
                         <div
                             key={log.id}
                             className="flex items-start gap-4 text-sm font-mono"
@@ -341,3 +342,5 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     </Card>
   );
 }
+
+    
