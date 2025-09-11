@@ -27,8 +27,8 @@ import { Environment, SyncSchedule } from '@/contexts/sync-context';
 import { Separator } from './ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Checkbox } from './ui/checkbox';
-import { getApp, initializeApp, deleteApp } from 'firebase/app';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { initializeApp, deleteApp } from 'firebase/app';
+import { getFirestore, doc, getDoc, enableNetwork, disableNetwork } from 'firebase/firestore';
 import { CheckCircle, Loader2, XCircle } from 'lucide-react';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction } from './ui/alert-dialog';
 
@@ -166,12 +166,26 @@ export default function EnvironmentForm({
       }
       testApp = initializeApp(data.firebaseConfig, appName);
       const db = getFirestore(testApp);
-      // We test by trying to get a non-existent document. This requires a valid authenticated connection.
-      const docRef = doc(db, data.firestoreCollection, 'connection-test');
-      await getDoc(docRef);
+
+      // Tenta uma operação de leitura com um timeout. A mensagem "client is offline"
+      // geralmente significa que a conexão inicial falhou.
+      await Promise.race([
+        getDoc(doc(db, data.firestoreCollection, 'connection-test')),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout: A conexão demorou muito para ser estabelecida.")), 5000))
+      ]);
+
       setFirebaseTest({ status: 'success', message: 'Conexão com o Firestore estabelecida com sucesso.' });
     } catch (error: any) {
-      setFirebaseTest({ status: 'error', message: `Falha na conexão com o Firestore: ${error.message}` });
+        let errorMessage = `Falha na conexão com o Firestore: ${error.message}.`;
+        if (error.message.includes('client is offline') || error.message.includes('Timeout')) {
+            errorMessage += "\n\nPossíveis causas:\n" +
+                            "1. Verifique se as credenciais (apiKey, projectId, etc.) estão corretas.\n" +
+                            "2. Confirme se você já criou um banco de dados Firestore no seu projeto Firebase.\n" +
+                            "3. Verifique se as restrições da sua API Key no Google Cloud permitem o uso a partir deste domínio/localhost.";
+        } else if (error.message.includes('permission-denied')) {
+            errorMessage += "\n\nAcesso negado pelas Regras de Segurança do Firestore. Verifique se suas regras permitem a operação de leitura.";
+        }
+      setFirebaseTest({ status: 'error', message: errorMessage });
     } finally {
         if (testApp) {
             await deleteApp(testApp);
@@ -194,7 +208,7 @@ export default function EnvironmentForm({
       {result.status === 'error' && <XCircle className="h-6 w-6 text-red-500 flex-shrink-0 mt-1" />}
       <div>
         <p className="font-semibold">{title}</p>
-        <p className="text-sm text-muted-foreground">{result.message}</p>
+        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{result.message}</p>
       </div>
     </div>
   );
