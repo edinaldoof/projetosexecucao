@@ -108,7 +108,8 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       return;
     }
     
-    // Initialize or get the existing app instance to avoid re-initialization errors.
+    // Each sync instance gets its own uniquely named Firebase app instance.
+    // This is critical for ensuring connections don't get mixed up.
     const appName = `firebase-app-${env.id}`;
     let app;
     if (!getApps().some(app => app.name === appName)) {
@@ -119,7 +120,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     const db = getFirestore(app);
 
     if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+      abortControllerRef.current.abort(); // Abort previous controller if any
     }
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
@@ -130,7 +131,9 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     try {
       dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'info', message: 'Iniciando busca de dados na API de origem...' } });
       dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 10 });
+      
       const response = await fetch(env.url, { signal });
+      if (signal.aborted) throw new Error('Sincronização abortada.');
       dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 25 });
 
       if (!response.ok) {
@@ -138,6 +141,8 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       }
       
       const data = await response.json();
+      if (signal.aborted) throw new Error('Sincronização abortada.');
+
       // Store full data for download
       setLastFetchedData(data);
       
@@ -188,14 +193,18 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     if (sync.isPaused) {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
+        // The finally block in handleSync will set it to null.
       }
-      return;
+      return; // Stop any new timers from being set
     }
 
     const { value, unit, days } = env.schedule;
     const intervalInMs = value * (unit === 'seconds' ? 1000 : unit === 'minutes' ? 60000 : 3600000);
 
     const checkAndRun = () => {
+      // Re-check isPaused inside the timer to catch state changes.
+      if (sync.isPaused) return;
+
       const now = new Date();
       const scheduledDays = days.length > 0 ? days.map(d => dayMap[d]) : [0,1,2,3,4,5,6];
 
@@ -205,12 +214,22 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       
       const lastRun = lastRunRef.current ?? (Date.now() - intervalInMs);
       if (Date.now() - lastRun >= intervalInMs) {
-        handleSync();
+        handleSync(false); // Pass isManual as false
       }
     };
 
+    // Initial check on resume
+    checkAndRun();
+
     const timer = setInterval(checkAndRun, 1000);
-    return () => clearInterval(timer);
+    
+    // Cleanup function
+    return () => {
+      clearInterval(timer);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [sync.isPaused, env.schedule, handleSync]);
 
   const isPreviewTruncated = Array.isArray(lastFetchedData) && lastFetchedData.length > PREVIEW_ITEM_LIMIT;
@@ -368,5 +387,3 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     </Card>
   );
 }
-
-    
