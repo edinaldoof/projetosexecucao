@@ -17,7 +17,7 @@ import {
   Info,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getApp, getApps, initializeApp } from 'firebase/app';
+import { getApp, getApps, initializeApp, deleteApp } from 'firebase/app';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import JSONPretty from 'react-json-pretty';
 
@@ -77,7 +77,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isLogsOpen, setIsLogsOpen] = useState(false);
   const [lastFetchedData, setLastFetchedData] = useState<any | null>(null);
-  const lastRunRef = useRef<number>(Date.now());
+  const lastRunRef = useRef<number | null>(null);
 
   const handleDownloadJson = () => {
     if (!lastFetchedData) return;
@@ -93,22 +93,24 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     URL.revokeObjectURL(url);
   };
 
-  const handleSync = useCallback(async () => {
-    if (sync.isPaused) return;
+  const handleSync = useCallback(async (isManual: boolean = false) => {
+    if (sync.isPaused && !isManual) return;
+    if (sync.syncState === 'syncing') return; // Prevent multiple concurrent syncs
 
     if (!env.firebaseConfig?.projectId || !env.url) {
       const errorMessage = "Configuração do Firebase ou URL de origem ausente. Verifique as configurações da conexão.";
       dispatch({ type: 'SYNC_ERROR', id: sync.id, error: errorMessage });
-      toast({
-        variant: 'destructive',
-        title: `Falha na Configuração: ${env.name}`,
-        description: errorMessage,
-      });
       return;
     }
     
+    // Initialize or get the existing app instance to avoid re-initialization errors.
     const appName = `firebase-app-${env.id}`;
-    const app = getApps().find(app => app.name === appName) || initializeApp(env.firebaseConfig, appName);
+    let app;
+    if (!getApps().some(app => app.name === appName)) {
+        app = initializeApp(env.firebaseConfig, appName);
+    } else {
+        app = getApp(appName);
+    }
     const db = getFirestore(app);
 
     if (abortControllerRef.current) {
@@ -138,44 +140,35 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
         throw new Error("Os dados recebidos da API não são um array. A sincronização com o Firestore requer um array de objetos.");
       }
       
-      dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'info', message: `Iniciando sincronização de ${data.length} registros para a coleção '${env.firestoreCollection}'...` } });
-
       const totalItems = data.length;
+      dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'info', message: `Sincronizando ${totalItems} registros para a coleção '${env.firestoreCollection}'...` } });
+
       for (const [index, item] of data.entries()) {
+         if (signal.aborted) throw new Error('Sincronização abortada.');
         if (typeof item !== 'object' || item === null) {
           dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'error', message: `Item inválido encontrado no índice ${index}. Ignorando.` } });
           continue;
         }
 
-        // Use item.id if it exists, otherwise Firestore will generate one.
-        const docId = item.id ? String(item.id) : undefined;
-        const docRef = docId ? doc(db, env.firestoreCollection, docId) : doc(db, env.firestoreCollection);
+        const docId = item.id ? String(item.id) : uuidv4();
+        const docRef = doc(db, env.firestoreCollection, docId);
         
-        await setDoc(docRef, item, { merge: true }); // Using { merge: true } to update existing docs or create new ones.
+        await setDoc(docRef, item, { merge: true });
 
-        const progress = 50 + Math.round(((index + 1) / totalItems) * 50);
+        const progress = 25 + Math.round(((index + 1) / totalItems) * 75);
         dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress });
       }
 
-      dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'success', message: `Sincronização de ${totalItems} registros com o Firestore concluída.` } });
+      dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'success', message: `Sincronização de ${totalItems} registros concluída.` } });
       dispatch({ type: 'SYNC_SUCCESS', id: sync.id });
 
     } catch (error: any) {
-      if (error.name === 'AbortError') {
-        dispatch({ type: 'SYNC_ERROR', id: sync.id, error: 'Sincronização abortada pelo usuário.' });
-      } else {
-        const enhancedMessage = error.message;
-        dispatch({ type: 'SYNC_ERROR', id: sync.id, error: enhancedMessage });
-        toast({
-          variant: 'destructive',
-          title: `Falha na Sincronização: ${env.name}`,
-          description: enhancedMessage,
-        });
-      }
+       const errorMessage = error.name === 'AbortError' ? 'Sincronização abortada pelo usuário.' : error.message;
+       dispatch({ type: 'SYNC_ERROR', id: sync.id, error: errorMessage });
     } finally {
       abortControllerRef.current = null;
     }
-  }, [env, sync.id, sync.isPaused, toast, dispatch]);
+  }, [env, sync.id, sync.isPaused, sync.syncState, dispatch]);
 
  useEffect(() => {
     if (sync.isPaused) {
@@ -190,13 +183,14 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
 
     const checkAndRun = () => {
       const now = new Date();
-      const scheduledDays = days.map(d => dayMap[d]);
+      const scheduledDays = days.length > 0 ? days.map(d => dayMap[d]) : [0,1,2,3,4,5,6];
 
-      if (scheduledDays.length > 0 && !scheduledDays.includes(now.getDay())) {
+      if (!scheduledDays.includes(now.getDay())) {
         return;
       }
       
-      if (Date.now() - lastRunRef.current >= intervalInMs) {
+      const lastRun = lastRunRef.current ?? (Date.now() - intervalInMs);
+      if (Date.now() - lastRun >= intervalInMs) {
         handleSync();
       }
     };
@@ -222,7 +216,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
                 className="flex items-center gap-2"
             >
                 <StatusIcon status={sync.syncState} />
-                {sync.isPaused ? 'Pausado' : 'Ativo'}
+                {sync.isPaused ? 'Pausado' : sync.syncState === 'syncing' ? 'Sincronizando' : 'Ativo'}
             </Badge>
         </div>
       </CardHeader>
@@ -303,7 +297,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
 
             <Button
               variant="outline"
-              onClick={handleSync}
+              onClick={() => handleSync(true)}
               disabled={sync.syncState === 'syncing'}
               className="w-full"
             >

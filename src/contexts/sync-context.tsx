@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useReducer, ReactNode, Dispatch, useEffect } from "react";
+import { createContext, useContext, useReducer, ReactNode, Dispatch, useEffect, useCallback } from "react";
 import { v4 as uuidv4 } from 'uuid';
 
 // Types
@@ -51,6 +51,7 @@ export type SyncInstance = {
 type State = {
   environments: Environment[];
   syncs: SyncInstance[];
+  isInitialized: boolean;
 };
 
 type Action =
@@ -68,6 +69,7 @@ type Action =
 const initialState: State = {
   environments: [],
   syncs: [],
+  isInitialized: false,
 };
 
 const emptyFirebaseConfig: FirebaseConfig = {
@@ -79,13 +81,11 @@ const emptyFirebaseConfig: FirebaseConfig = {
   appId: '',
 };
 
-// Default values are for example purposes only.
-const defaultEnvironments: Environment[] = [];
-
+// Reducer
 function syncReducer(state: State, action: Action): State {
   switch (action.type) {
     case 'INITIALIZE_STATE':
-        return action.payload;
+      return { ...action.payload, isInitialized: true };
 
     case 'TOGGLE_PAUSE':
       return {
@@ -113,15 +113,6 @@ function syncReducer(state: State, action: Action): State {
                 syncState: 'success',
                 lastSync: new Date(),
                 syncProgress: 100,
-                logs: [
-                  ...sync.logs,
-                  {
-                    id: uuidv4(),
-                    message: 'Sincronização concluída com sucesso.',
-                    status: 'success',
-                    timestamp: new Date().toLocaleTimeString(),
-                  },
-                ],
               }
             : sync
         ),
@@ -150,32 +141,32 @@ function syncReducer(state: State, action: Action): State {
       };
       
     case 'UPDATE_PROGRESS':
-        return {
-          ...state,
-          syncs: state.syncs.map(sync =>
-            sync.id === action.id ? { ...sync, syncProgress: action.progress } : sync
-          ),
-        };
+      return {
+        ...state,
+        syncs: state.syncs.map(sync =>
+          sync.id === action.id ? { ...sync, syncProgress: action.progress } : sync
+        ),
+      };
     
     case 'ADD_LOG':
-        return {
-            ...state,
-            syncs: state.syncs.map(sync =>
-            sync.id === action.id
-                ? {
-                    ...sync,
-                    logs: [
-                        ...sync.logs,
-                        {
-                            ...action.log,
-                            id: uuidv4(),
-                            timestamp: new Date().toLocaleTimeString(),
-                        },
-                    ],
-                }
-                : sync
-            ),
-        };
+      return {
+        ...state,
+        syncs: state.syncs.map(sync =>
+          sync.id === action.id
+            ? {
+                ...sync,
+                logs: [
+                  {
+                    ...action.log,
+                    id: uuidv4(),
+                    timestamp: new Date().toLocaleTimeString(),
+                  },
+                  ...sync.logs, // Add new logs to the top
+                ].slice(0, 50), // Keep only the last 50 logs
+              }
+            : sync
+        ),
+      };
 
     case 'ADD_ENVIRONMENT': {
       const newId = uuidv4();
@@ -222,6 +213,46 @@ function syncReducer(state: State, action: Action): State {
   }
 }
 
+// API functions to interact with the server-side JSON file
+const loadStateFromFile = async (): Promise<State> => {
+    try {
+        const response = await fetch('/api/environments');
+        if (!response.ok) {
+            throw new Error('Failed to fetch environments config');
+        }
+        const environments = await response.json();
+
+        // Create sync instances based on loaded environments
+        const syncs: SyncInstance[] = environments.map((env: Environment) => ({
+            id: env.id,
+            isPaused: true,
+            syncState: 'idle',
+            syncProgress: 0,
+            logs: [],
+        }));
+
+        return { environments, syncs, isInitialized: true };
+    } catch (error) {
+        console.error("Failed to load state from file, using initial state.", error);
+        return { ...initialState, isInitialized: true };
+    }
+};
+
+const saveStateToFile = async (state: State) => {
+    try {
+        await fetch('/api/environments', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(state.environments), // Only save environments
+        });
+    } catch (error) {
+        console.error("Failed to save state to file", error);
+    }
+};
+
+
 type SyncContextType = {
   state: State;
   dispatch: Dispatch<Action>;
@@ -229,99 +260,24 @@ type SyncContextType = {
 
 const SyncContext = createContext<SyncContextType | undefined>(undefined);
 
-const loadState = (): State => {
-    try {
-        const storedState = localStorage.getItem('syncAppState');
-        if (!storedState) {
-          const initialSyncs: SyncInstance[] = defaultEnvironments.map(env => ({
-              id: env.id,
-              isPaused: true,
-              syncState: 'idle',
-              syncProgress: 0,
-              logs: [],
-          }));
-          return { environments: defaultEnvironments, syncs: initialSyncs };
-        }
-        
-        const parsedState = JSON.parse(storedState);
-
-        if (!Array.isArray(parsedState.environments) || !Array.isArray(parsedState.syncs)) {
-          throw new Error("Invalid state structure");
-        }
-
-        parsedState.environments = parsedState.environments.map((env: any) => ({
-            ...env,
-            id: env.id || uuidv4(),
-            name: env.name || 'Untitled Connection',
-            url: env.url || '',
-            firestoreCollection: env.firestoreCollection || env.firebasePath || 'sincronizacao-dados', // Migration
-            firebasePath: undefined, // remove old property
-            firebaseConfig: env.firebaseConfig || emptyFirebaseConfig,
-            schedule: env.schedule || { value: 30, unit: 'seconds', days: [] },
-        }));
-        
-        const envIds = new Set(parsedState.environments.map((e: Environment) => e.id));
-        parsedState.syncs = parsedState.syncs.filter((s: SyncInstance) => envIds.has(s.id));
-        
-        parsedState.environments.forEach((env: Environment) => {
-            const syncExists = parsedState.syncs.some((s: SyncInstance) => s.id === env.id);
-            if (!syncExists) {
-                parsedState.syncs.push({
-                    id: env.id,
-                    isPaused: true,
-                    syncState: 'idle',
-                    syncProgress: 0,
-                    logs: [],
-                });
-            }
-        });
-
-        parsedState.syncs.forEach((sync: SyncInstance) => {
-          if (sync.logs && sync.logs.length > 50) {
-            sync.logs = sync.logs.slice(0, 50);
-          }
-        });
-
-        return parsedState;
-
-    } catch (error) {
-        console.error("Failed to parse state from localStorage, loading default state.", error);
-        const initialSyncs: SyncInstance[] = defaultEnvironments.map(env => ({
-            id: env.id,
-            isPaused: true,
-            syncState: 'idle',
-            syncProgress: 0,
-            logs: [],
-        }));
-        return { environments: defaultEnvironments, syncs: initialSyncs };
-    }
-};
-
-
 export function SyncProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(syncReducer, initialState);
 
+  // Load initial state from the file
   useEffect(() => {
-    const loadedState = loadState();
-    dispatch({ type: 'INITIALIZE_STATE', payload: loadedState });
+    const initState = async () => {
+        const loadedState = await loadStateFromFile();
+        dispatch({ type: 'INITIALIZE_STATE', payload: loadedState });
+    }
+    initState();
   }, []);
 
+  // Save state to file whenever environments change
   useEffect(() => {
-    try {
-      if (state !== initialState) {
-        const stateToSave = {
-            ...state,
-            environments: state.environments.map(e => {
-                const { firebasePath, ...rest } = e as any;
-                return rest;
-            })
-        };
-        localStorage.setItem('syncAppState', JSON.stringify(stateToSave));
-      }
-    } catch (error) {
-        console.error("Failed to save state to localStorage", error);
+    if (state.isInitialized) {
+      saveStateToFile(state);
     }
-  }, [state]);
+  }, [state.environments, state.isInitialized]);
 
 
   return (
