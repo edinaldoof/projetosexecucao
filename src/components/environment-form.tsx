@@ -191,7 +191,7 @@ export default function EnvironmentForm({
     } finally {
         if (testApp) {
             // Cleanup the temporary firebase app instance
-            await deleteApp(testApp);
+            await deleteApp(testApp).catch(err => console.error("Falha ao limpar app de teste:", err));
         }
         setIsTesting(false);
     }
