@@ -11,9 +11,7 @@ app = Flask(__name__)
 CORS(app, resources={r"/api/*": {
     "origins": [
         "http://192.168.3.31:777", # Origem de Desenvolvimento
-        "http://192.168.3.31:3000", # Origem de Produção
-        "http://localhost:777",      # Localhost para Desenvolvimento
-        "http://localhost:3000"       # Localhost para Produção
+        "http://localhost:777"      # Localhost para Desenvolvimento
     ],
     "methods": ["GET", "HEAD"],
     "allow_headers": ["Content-Type"]
