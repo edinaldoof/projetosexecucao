@@ -174,10 +174,20 @@ export default function EnvironmentForm({
       const db = getFirestore(testApp);
       const testDocRef = doc(db, `fadex-connection-test/${Date.now()}`);
 
+      const timeoutError = new Error(
+        "Timeout: A conexão demorou mais de 10 segundos.\n\n" +
+        "Possíveis causas:\n" +
+        "1. Credenciais (apiKey, projectId) incorretas.\n" +
+        "2. O banco de dados Firestore não foi criado/ativado neste projeto Firebase.\n" +
+        "3. Restrições na sua API Key (no Google Cloud) que bloqueiam 'localhost' ou este domínio.\n" +
+        "4. Um firewall ou problema de rede bloqueando a porta 443.\n\n" +
+        "DICA: Abra o console do desenvolvedor (F12) para ver a configuração exata usada no teste."
+      );
+
       await Promise.race([
         getDoc(testDocRef),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Timeout: A conexão demorou muito para ser estabelecida.")), 10000)
+          setTimeout(() => reject(timeoutError), 10000)
         )
       ]);
 
@@ -187,18 +197,9 @@ export default function EnvironmentForm({
         console.error("Erro no teste de conexão do Firebase:", error);
         let errorMessage = `Falha na conexão com o Firestore: ${error.message}.`;
         
-        // This is the expected behavior for a non-public database. It means we connected, but were denied access, which is a success for connection testing.
         if (error.code === 'permission-denied' || (error.message && error.message.includes('permission-denied'))) {
             setFirebaseTest({ status: 'success', message: 'Conexão estabelecida, mas as Regras de Segurança negaram a leitura (isso é esperado se as regras não forem públicas e confirma que a conectividade funciona).' });
         } else {
-             if (error.message.includes('Timeout')) {
-                errorMessage += "\n\nPossíveis causas:\n" +
-                                "1. Verifique as credenciais (apiKey, projectId, etc.) no formulário.\n" +
-                                "2. Confirme se você já criou um banco de dados Firestore no seu projeto Firebase.\n" +
-                                "3. Verifique se as restrições da sua API Key no Google Cloud permitem o uso a partir deste domínio/localhost.\n" +
-                                "4. Verifique as Regras de Segurança do seu Firestore.\n\n" +
-                                "DICA: Abra o console do desenvolvedor (F12) para ver a configuração exata usada no teste.";
-             }
              setFirebaseTest({ status: 'error', message: errorMessage });
         }
     } finally {
