@@ -64,7 +64,8 @@ type Action =
   | { type: 'ADD_LOG'; id: string; log: Omit<LogEntry, 'id' | 'timestamp'> }
   | { type: 'ADD_ENVIRONMENT'; environment: Omit<Environment, 'id'> & { id?: string } }
   | { type: 'UPDATE_ENVIRONMENT'; environment: Environment }
-  | { type: 'REMOVE_ENVIRONMENT'; id: string };
+  | { type: 'REMOVE_ENVIRONMENT'; id: string }
+  | { type: 'CLEAR_ERROR'; id: string };
 
 const initialState: State = {
   environments: [],
@@ -197,6 +198,11 @@ function syncReducer(state: State, action: Action): State {
         environments: state.environments.map(env =>
           env.id === action.environment.id ? action.environment : env
         ),
+        syncs: state.syncs.map(sync =>
+            sync.id === action.environment.id
+            ? { ...sync, syncState: 'idle', syncProgress: 0 }
+            : sync
+        ),
       };
     }
 
@@ -207,6 +213,14 @@ function syncReducer(state: State, action: Action): State {
         syncs: state.syncs.filter(sync => sync.id !== action.id),
       };
     }
+
+    case 'CLEAR_ERROR':
+      return {
+        ...state,
+        syncs: state.syncs.map(sync =>
+          sync.id === action.id ? { ...sync, syncState: 'idle', syncProgress: 0 } : sync
+        ),
+      };
 
     default:
       return state;

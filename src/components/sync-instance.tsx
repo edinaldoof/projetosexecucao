@@ -14,14 +14,21 @@ import {
   Database,
   Eye,
   Download,
+<<<<<<< HEAD
   Info,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
+=======
+  AlertTriangle,
+} from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+>>>>>>> origin/main
 import JSONPretty from 'react-json-pretty';
 import { v4 as uuidv4 } from 'uuid';
 
+import { performSync } from '@/lib/sync-logic';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -97,9 +104,13 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isLogsOpen, setIsLogsOpen] = useState(false);
   const [lastFetchedData, setLastFetchedData] = useState<any | null>(null);
+<<<<<<< HEAD
   const [previewData, setPreviewData] = useState<any | null>(null);
   const lastRunRef = useRef<number | null>(sync.lastSync ? new Date(sync.lastSync).getTime() : null);
   const [countdown, setCountdown] = useState('');
+=======
+  const lastRunRef = useRef<number>(sync.lastSync ? new Date(sync.lastSync).getTime() : Date.now());
+>>>>>>> origin/main
 
   const handleDownloadJson = () => {
     if (!lastFetchedData) return;
@@ -132,6 +143,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     if (sync.isPaused && !isManual) return;
     if (sync.syncState === 'syncing') return;
 
+<<<<<<< HEAD
     if (!env.firebaseConfig?.projectId || !env.url) {
       const errorMessage = "Configuração do Firebase ou URL de origem ausente. Verifique as configurações da conexão.";
       dispatch({ type: 'SYNC_ERROR', id: sync.id, error: errorMessage });
@@ -147,6 +159,8 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     }
     const db = getFirestore(app);
 
+=======
+>>>>>>> origin/main
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -157,6 +171,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     lastRunRef.current = Date.now();
 
     try {
+<<<<<<< HEAD
       dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'info', message: 'Iniciando busca de dados na API de origem...' } });
       dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 10 });
       
@@ -173,6 +188,24 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
       const data = await response.json();
       if (signal.aborted) {
           throw new Error('Sincronização abortada.');
+=======
+      dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 50 });
+      const data = await performSync(env, signal);
+      setLastFetchedData(data);
+      dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 100 });
+      dispatch({ type: 'SYNC_SUCCESS', id: sync.id });
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        dispatch({ type: 'SYNC_ERROR', id: sync.id, error: 'Sincronização abortada pelo usuário.' });
+      } else {
+        const { enhancedMessage } = await smartSyncNotifications({ errorMessage: error.message });
+        dispatch({ type: 'SYNC_ERROR', id: sync.id, error: enhancedMessage });
+        toast({
+          variant: 'destructive',
+          title: `Falha na Sincronização: ${env.name}`,
+          description: enhancedMessage,
+        });
+>>>>>>> origin/main
       }
 
       setLastFetchedData(data);
@@ -339,11 +372,24 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
             </div>
 
           <Progress value={sync.syncProgress} className="w-full" />
+<<<<<<< HEAD
           <div className="flex justify-between text-sm text-muted-foreground">
             <div className="flex items-center gap-1.5">
               <Clock className="h-4 w-4" />
               <span>{getStatusText()}</span>
             </div>
+=======
+          <div className="flex justify-between text-sm text-gray-500">
+            <span>
+              {sync.syncState === 'syncing'
+                ? 'Sincronizando...'
+                : sync.syncState === 'error'
+                ? 'Erro'
+                : sync.isPaused 
+                ? 'Pausado'
+                : 'Aguardando agendamento'}
+            </span>
+>>>>>>> origin/main
             <span>{sync.syncProgress}%</span>
           </div>
         </div>
@@ -396,6 +442,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
                 </DialogContent>
             </Dialog>
 
+<<<<<<< HEAD
             <Button
               variant="outline"
               onClick={() => handleSync(true)}
@@ -405,6 +452,28 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
               <RefreshCw />
               Sincronizar Agora
             </Button>
+=======
+            {sync.syncState === 'error' ? (
+                <Button
+                    variant="destructive"
+                    onClick={() => dispatch({ type: 'CLEAR_ERROR', id: sync.id })}
+                    className="w-full"
+                >
+                    <AlertTriangle />
+                    Limpar Erro
+                </Button>
+            ) : (
+                <Button
+                    variant="outline"
+                    onClick={handleSync}
+                    disabled={sync.syncState === 'syncing'}
+                    className="w-full"
+                >
+                    <RefreshCw />
+                    Sincronizar Agora
+                </Button>
+            )}
+>>>>>>> origin/main
         </div>
          <Collapsible open={isLogsOpen} onOpenChange={setIsLogsOpen} className="w-full">
             <CollapsibleTrigger asChild>
