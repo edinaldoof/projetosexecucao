@@ -15,12 +15,12 @@ import {
   Calendar,
   Eye,
   Download,
+  AlertTriangle,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getApp, getApps, initializeApp } from 'firebase/app';
-import { getStorage, ref, uploadString } from 'firebase/storage';
 import JSONPretty from 'react-json-pretty';
 
+import { performSync } from '@/lib/sync-logic';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -96,7 +96,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isLogsOpen, setIsLogsOpen] = useState(false);
   const [lastFetchedData, setLastFetchedData] = useState<any | null>(null);
-  const lastRunRef = useRef<number>(Date.now());
+  const lastRunRef = useRef<number>(sync.lastSync ? new Date(sync.lastSync).getTime() : Date.now());
 
   const handleDownloadJson = () => {
     if (!lastFetchedData) return;
@@ -115,21 +115,6 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
   const handleSync = useCallback(async () => {
     if (sync.isPaused) return;
 
-    if (!env.firebaseConfig?.projectId || !env.url) {
-      const errorMessage = "Configuração do Firebase ou URL de origem ausente. Verifique as configurações da conexão.";
-      dispatch({ type: 'SYNC_ERROR', id: sync.id, error: errorMessage });
-      toast({
-        variant: 'destructive',
-        title: `Falha na Configuração: ${env.name}`,
-        description: errorMessage,
-      });
-      return;
-    }
-    
-    const appName = `firebase-app-${env.id}`;
-    const app = getApps().find(app => app.name === appName) || initializeApp(env.firebaseConfig, appName);
-    const storage = getStorage(app);
-
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -140,23 +125,10 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     lastRunRef.current = Date.now();
 
     try {
-      dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 25 });
-      const response = await fetch(env.url, { signal });
-
-      if (!response.ok) {
-        throw new Error(`A resposta da rede não foi 'ok': ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      setLastFetchedData(data); // Store the JSON object itself
       dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 50 });
-
-      const storageRef = ref(storage, `${env.firebasePath}/${new Date().toISOString()}.json`);
-      const dataString = JSON.stringify(data, null, 2);
-      await uploadString(storageRef, dataString, 'raw');
-      
+      const data = await performSync(env, signal);
+      setLastFetchedData(data);
       dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 100 });
-      
       dispatch({ type: 'SYNC_SUCCESS', id: sync.id });
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -254,6 +226,8 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
             <span>
               {sync.syncState === 'syncing'
                 ? 'Sincronizando...'
+                : sync.syncState === 'error'
+                ? 'Erro'
                 : sync.isPaused 
                 ? 'Pausado'
                 : 'Aguardando agendamento'}
@@ -299,15 +273,26 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
                 </DialogContent>
             </Dialog>
 
-            <Button
-              variant="outline"
-              onClick={handleSync}
-              disabled={sync.syncState === 'syncing'}
-              className="w-full"
-            >
-              <RefreshCw />
-              Sincronizar Agora
-            </Button>
+            {sync.syncState === 'error' ? (
+                <Button
+                    variant="destructive"
+                    onClick={() => dispatch({ type: 'CLEAR_ERROR', id: sync.id })}
+                    className="w-full"
+                >
+                    <AlertTriangle />
+                    Limpar Erro
+                </Button>
+            ) : (
+                <Button
+                    variant="outline"
+                    onClick={handleSync}
+                    disabled={sync.syncState === 'syncing'}
+                    className="w-full"
+                >
+                    <RefreshCw />
+                    Sincronizar Agora
+                </Button>
+            )}
         </div>
          <Collapsible open={isLogsOpen} onOpenChange={setIsLogsOpen} className="w-full">
             <CollapsibleTrigger asChild>
