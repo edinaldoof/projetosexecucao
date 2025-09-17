@@ -14,19 +14,11 @@ import {
   Database,
   Eye,
   Download,
-<<<<<<< HEAD
   Info,
-} from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { getApp, getApps, initializeApp } from 'firebase/app';
-import { getFirestore, doc, setDoc } from 'firebase/firestore';
-=======
   AlertTriangle,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
->>>>>>> origin/main
 import JSONPretty from 'react-json-pretty';
-import { v4 as uuidv4 } from 'uuid';
 
 import { performSync } from '@/lib/sync-logic';
 import { Badge } from '@/components/ui/badge';
@@ -45,6 +37,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collap
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { ScrollArea } from './ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { useToast } from '@/hooks/use-toast';
+import { smartSyncNotifications } from '@/ai/flows/smart-sync-notifications';
+
 
 type SyncState = 'idle' | 'syncing' | 'success' | 'error';
 
@@ -101,16 +96,13 @@ function formatCountdown(milliseconds: number): string {
 
 export default function SyncInstance({ sync, env }: SyncInstanceProps) {
   const { dispatch } = useSync();
+  const { toast } = useToast();
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isLogsOpen, setIsLogsOpen] = useState(false);
   const [lastFetchedData, setLastFetchedData] = useState<any | null>(null);
-<<<<<<< HEAD
   const [previewData, setPreviewData] = useState<any | null>(null);
   const lastRunRef = useRef<number | null>(sync.lastSync ? new Date(sync.lastSync).getTime() : null);
   const [countdown, setCountdown] = useState('');
-=======
-  const lastRunRef = useRef<number>(sync.lastSync ? new Date(sync.lastSync).getTime() : Date.now());
->>>>>>> origin/main
 
   const handleDownloadJson = () => {
     if (!lastFetchedData) return;
@@ -143,24 +135,6 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     if (sync.isPaused && !isManual) return;
     if (sync.syncState === 'syncing') return;
 
-<<<<<<< HEAD
-    if (!env.firebaseConfig?.projectId || !env.url) {
-      const errorMessage = "Configuração do Firebase ou URL de origem ausente. Verifique as configurações da conexão.";
-      dispatch({ type: 'SYNC_ERROR', id: sync.id, error: errorMessage });
-      return;
-    }
-    
-    const appName = `firebase-app-${env.id}`;
-    let app;
-    if (!getApps().some(app => app.name === appName)) {
-        app = initializeApp(env.firebaseConfig, appName);
-    } else {
-        app = getApp(appName);
-    }
-    const db = getFirestore(app);
-
-=======
->>>>>>> origin/main
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -168,94 +142,58 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
     const signal = abortControllerRef.current.signal;
 
     dispatch({ type: 'START_SYNC', id: sync.id });
+    dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'info', message: 'Iniciando sincronização...' } });
     lastRunRef.current = Date.now();
 
     try {
-<<<<<<< HEAD
-      dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'info', message: 'Iniciando busca de dados na API de origem...' } });
-      dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 10 });
-      
-      const response = await fetch(env.url, { signal });
-      if (signal.aborted) {
-          throw new Error('Sincronização abortada.');
-      }
-      dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 25 });
+      const onProgress = (progress: number) => {
+        if (!signal.aborted) {
+          dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress });
+        }
+      };
 
-      if (!response.ok) {
-        throw new Error(`A resposta da rede não foi 'ok': ${response.statusText}`);
-      }
+      const data = await performSync(env, signal, onProgress);
       
-      const data = await response.json();
-      if (signal.aborted) {
-          throw new Error('Sincronização abortada.');
-=======
-      dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 50 });
-      const data = await performSync(env, signal);
       setLastFetchedData(data);
-      dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress: 100 });
-      dispatch({ type: 'SYNC_SUCCESS', id: sync.id });
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        dispatch({ type: 'SYNC_ERROR', id: sync.id, error: 'Sincronização abortada pelo usuário.' });
-      } else {
-        const { enhancedMessage } = await smartSyncNotifications({ errorMessage: error.message });
-        dispatch({ type: 'SYNC_ERROR', id: sync.id, error: enhancedMessage });
-        toast({
-          variant: 'destructive',
-          title: `Falha na Sincronização: ${env.name}`,
-          description: enhancedMessage,
-        });
->>>>>>> origin/main
-      }
-
-      setLastFetchedData(data);
-      
       if (Array.isArray(data) && data.length > PREVIEW_ITEM_LIMIT) {
         setPreviewData(data.slice(0, PREVIEW_ITEM_LIMIT));
       } else {
         setPreviewData(data);
       }
 
-      dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'success', message: 'Dados JSON recebidos com sucesso.' } });
-      
-      if (!Array.isArray(data)) {
-        throw new Error("Os dados recebidos da API não são um array. A sincronização com o Firestore requer um array de objetos.");
-      }
-      
-      const totalItems = data.length;
-      dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'info', message: `Sincronizando ${totalItems} registros para a coleção '${env.firestoreCollection}'...` } });
-
-      for (const [index, item] of data.entries()) {
-         if (signal.aborted) {
-             throw new Error('Sincronização abortada.');
-         }
-        if (typeof item !== 'object' || item === null) {
-          dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'error', message: `Item inválido encontrado no índice ${index}. Ignorando.` } });
-          continue;
-        }
-
-        const docId = item.id ? String(item.id) : uuidv4();
-        const docRef = doc(db, env.firestoreCollection, docId);
-        
-        await setDoc(docRef, item, { merge: true });
-
-        const progress = 25 + Math.round(((index + 1) / totalItems) * 75);
-        dispatch({ type: 'UPDATE_PROGRESS', id: sync.id, progress });
-      }
-
-      dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'success', message: `Sincronização de ${totalItems} registros concluída.` } });
+      dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'success', message: `Sincronização de ${data.length} registros concluída.` } });
       dispatch({ type: 'SYNC_SUCCESS', id: sync.id });
 
+      toast({
+        title: `Sincronização Concluída: ${env.name}`,
+        description: `Os dados foram sincronizados com sucesso.`,
+      });
+
     } catch (error: any) {
-       const errorMessage = error.name === 'AbortError' ? 'Sincronização abortada pelo usuário.' : error.message;
-       // Only dispatch an error if it wasn't a user-initiated pause
-       if (!sync.isPaused || isManual) {
-           dispatch({ type: 'SYNC_ERROR', id: sync.id, error: errorMessage });
-       }
+      if (error.name === 'AbortError') {
+        dispatch({ type: 'ADD_LOG', id: sync.id, log: { status: 'info', message: 'Sincronização abortada.' } });
+        dispatch({ type: 'SYNC_ERROR', id: sync.id, error: 'Sincronização abortada pelo usuário.' });
+        return;
+      }
+
+      let finalErrorMessage = error.message;
+      try {
+        const { enhancedMessage } = await smartSyncNotifications({ errorMessage: error.message });
+        finalErrorMessage = enhancedMessage;
+      } catch (aiError) {
+        console.error("AI notification service failed, falling back to original error.", aiError);
+      }
+
+      dispatch({ type: 'SYNC_ERROR', id: sync.id, error: finalErrorMessage });
+      toast({
+        variant: 'destructive',
+        title: `Falha na Sincronização: ${env.name}`,
+        description: finalErrorMessage,
+      });
     } finally {
       abortControllerRef.current = null;
     }
-  }, [env, sync.id, sync.isPaused, sync.syncState, dispatch]);
+  }, [env, sync.id, sync.isPaused, sync.syncState, dispatch, toast]);
 
  useEffect(() => {
     if (sync.isPaused) {
@@ -321,6 +259,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
   const getStatusText = () => {
     if (sync.syncState === 'syncing') return 'Sincronizando...';
     if (sync.isPaused) return 'Pausado';
+    if (sync.syncState === 'error') return 'Erro na sincronização';
     if (countdown) return `Próxima em: ${countdown}`;
     return 'Aguardando agendamento';
   };
@@ -372,24 +311,11 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
             </div>
 
           <Progress value={sync.syncProgress} className="w-full" />
-<<<<<<< HEAD
           <div className="flex justify-between text-sm text-muted-foreground">
             <div className="flex items-center gap-1.5">
               <Clock className="h-4 w-4" />
               <span>{getStatusText()}</span>
             </div>
-=======
-          <div className="flex justify-between text-sm text-gray-500">
-            <span>
-              {sync.syncState === 'syncing'
-                ? 'Sincronizando...'
-                : sync.syncState === 'error'
-                ? 'Erro'
-                : sync.isPaused 
-                ? 'Pausado'
-                : 'Aguardando agendamento'}
-            </span>
->>>>>>> origin/main
             <span>{sync.syncProgress}%</span>
           </div>
         </div>
@@ -442,17 +368,6 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
                 </DialogContent>
             </Dialog>
 
-<<<<<<< HEAD
-            <Button
-              variant="outline"
-              onClick={() => handleSync(true)}
-              disabled={sync.syncState === 'syncing'}
-              className="w-full"
-            >
-              <RefreshCw />
-              Sincronizar Agora
-            </Button>
-=======
             {sync.syncState === 'error' ? (
                 <Button
                     variant="destructive"
@@ -465,7 +380,7 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
             ) : (
                 <Button
                     variant="outline"
-                    onClick={handleSync}
+                    onClick={() => handleSync(true)}
                     disabled={sync.syncState === 'syncing'}
                     className="w-full"
                 >
@@ -473,7 +388,6 @@ export default function SyncInstance({ sync, env }: SyncInstanceProps) {
                     Sincronizar Agora
                 </Button>
             )}
->>>>>>> origin/main
         </div>
          <Collapsible open={isLogsOpen} onOpenChange={setIsLogsOpen} className="w-full">
             <CollapsibleTrigger asChild>
